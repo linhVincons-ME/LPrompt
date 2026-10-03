@@ -8,7 +8,8 @@ export function calculateTier(score: number): QualityTier {
 }
 
 /**
- * Đánh giá Prompt cục bộ bằng Heuristic & Regex (100% MIỄN PHÍ, chạy trên Client 0ms)
+ * Đánh giá Prompt cục bộ bằng Heuristic & Regex Chuẩn Song Ngữ (Việt - Anh & Thẻ tiền tố Kỹ thuật)
+ * 100% MIỄN PHÍ, chạy trên Client 0ms với độ chính xác cao
  */
 export function evaluatePromptLocally(prompt: string, domain: PromptDomain): PromptEvaluation {
   const p = prompt.trim();
@@ -36,103 +37,369 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     };
   }
 
-  // 1. Role & Context (Tối đa 20 điểm)
-  const hasRole = /(bạn là|chuyên gia|đóng vai|vai trò|nhập vai|you are|act as|as an? expert|as a senior|role:)/i.test(lower);
-  const hasContext = /(trong bối cảnh|ngữ cảnh|mục tiêu|dự án|khách hàng|target audience|context:|background:|scenario:)/i.test(lower);
-  
+  // =========================================================================
+  // 1. ROLE & CONTEXT (Tối đa 20 điểm)
+  // Hỗ trợ cả tiếng Việt, tiếng Anh và cấu trúc thẻ kỹ thuật: [ROLE], [PERSONA], etc.
+  // =========================================================================
+  const rolePatterns = [
+    // Tiền tố thẻ chuẩn
+    /\[role[^\]]*\]/i,
+    /\[persona[^\]]*\]/i,
+    /\[identity[^\]]*\]/i,
+    /\[expert[^\]]*\]/i,
+    /role\s*:/i,
+    /persona\s*:/i,
+    // Tiếng Việt
+    /bạn là/i,
+    /chuyên gia/i,
+    /đóng vai/i,
+    /vai trò/i,
+    /nhập vai/i,
+    /hãy là/i,
+    // Tiếng Anh
+    /you are/i,
+    /act as/i,
+    /assume the role/i,
+    /as an?\s+(expert|senior|lead|principal|specialist|architect|engineer|consultant|director|fellow|artist|photographer|master)/i,
+    /world-renowned/i,
+    /award-winning/i,
+    /experienced/i,
+    /master concept artist/i,
+    /director of photography/i,
+    /software engineer/i,
+    /system architect/i,
+    /research fellow/i,
+    /data scientist/i
+  ];
+
+  const contextPatterns = [
+    /\[context[^\]]*\]/i,
+    /\[background[^\]]*\]/i,
+    /\[objective[^\]]*\]/i,
+    /\[mandate[^\]]*\]/i,
+    /\[scenario[^\]]*\]/i,
+    /context\s*:/i,
+    /background\s*:/i,
+    /objective\s*:/i,
+    /goal\s*:/i,
+    /scenario\s*:/i,
+    /target audience/i,
+    // Tiếng Việt
+    /trong bối cảnh/i,
+    /ngữ cảnh/i,
+    /mục tiêu/i,
+    /dự án/i,
+    /khách hàng/i,
+    /đối tượng/i,
+    /tình huống/i
+  ];
+
+  const hasRole = rolePatterns.some((rgx) => rgx.test(lower));
+  const hasContext = contextPatterns.some((rgx) => rgx.test(lower));
+
   if (hasRole) {
     roleScore += 10;
-    pros.push('Đã định danh vai trò chuyên gia rõ ràng');
+    pros.push('Đã định danh vai trò chuyên gia (Role/Persona rõ ràng)');
   } else {
-    missing.push('Chưa xác định vai trò chuyên gia (VD: "Bạn là Senior Architect...")');
+    missing.push('Chưa xác định vai trò chuyên gia (VD: "Bạn là Senior Architect..." hoặc "[ROLE]: Expert...")');
   }
 
   if (hasContext || wordCount > 25) {
     roleScore += 10;
-    pros.push('Có cung cấp bối cảnh cụ thể');
+    pros.push('Có cung cấp bối cảnh/mục tiêu cụ thể (Context & Objective)');
   } else {
-    missing.push('Ngữ cảnh quá ngắn hoặc thiếu bối cảnh bài toán');
+    missing.push('Bối cảnh bài toán còn quá ngắn hoặc chưa rõ mục tiêu cốt lõi');
   }
 
-  // 2. Task Clarity & Steps (Tối đa 25 điểm)
-  const hasActionVerb = /(hãy|viết|tạo|phân tích|xây dựng|tối ưu|thiết kế|generate|write|create|analyze|build|develop|optimize)/i.test(lower);
-  const hasSteps = /(bước 1|bước 2|step 1|step 2|thứ nhất|thứ hai|quy trình|yêu cầu chi tiết|first|then|finally|1\.|2\.)/i.test(lower);
+  // =========================================================================
+  // 2. TASK CLARITY & INSTRUCTION STEPS (Tối đa 25 điểm)
+  // Hỗ trợ cả tiếng Việt, tiếng Anh và cấu trúc bước [TASK], [STEPS]
+  // =========================================================================
+  const actionVerbPatterns = [
+    // Tiền tố thẻ
+    /\[task[^\]]*\]/i,
+    /\[instruction[^\]]*\]/i,
+    /\[objective[^\]]*\]/i,
+    /\[subject[^\]]*\]/i,
+    /\[requirements?[^\]]*\]/i,
+    /task\s*:/i,
+    /instructions?\s*:/i,
+    // Tiếng Việt
+    /hãy/i,
+    /viết/i,
+    /tạo/i,
+    /phân tích/i,
+    /xây dựng/i,
+    /tối ưu/i,
+    /thiết kế/i,
+    /triển khai/i,
+    /giải thích/i,
+    /tóm tắt/i,
+    /nghiên cứu/i,
+    /chụp/i,
+    /quay/i,
+    /vẽ/i,
+    // Tiếng Anh
+    /generate/i,
+    /write/i,
+    /create/i,
+    /analyze/i,
+    /build/i,
+    /develop/i,
+    /optimize/i,
+    /implement/i,
+    /design/i,
+    /draft/i,
+    /refactor/i,
+    /summarize/i,
+    /explain/i,
+    /render/i,
+    /conduct/i,
+    /investigate/i,
+    /produce/i,
+    /capture/i,
+    /shot on/i,
+    /provide/i,
+    /execute/i
+  ];
+
+  const stepsPatterns = [
+    /\[steps?[^\]]*\]/i,
+    /\[execution[^\]]*\]/i,
+    /\[methodology[^\]]*\]/i,
+    /\[workflow[^\]]*\]/i,
+    // Tiếng Việt
+    /bước 1/i,
+    /bước 2/i,
+    /thứ nhất/i,
+    /thứ hai/i,
+    /giai đoạn 1/i,
+    /quy trình/i,
+    /yêu cầu chi tiết/i,
+    // Tiếng Anh
+    /step 1/i,
+    /step 2/i,
+    /first,/i,
+    /second,/i,
+    /finally/i,
+    /phase 1/i,
+    /phase 2/i,
+    /step-by-step/i,
+    /workflow:/i,
+    /procedure:/i,
+    /(^|\n)\s*1\.\s+/i,
+    /(^|\n)\s*2\.\s+/i,
+    /(^|\n)\s*-\s+/i
+  ];
+
+  const hasActionVerb = actionVerbPatterns.some((rgx) => rgx.test(lower));
+  const hasSteps = stepsPatterns.some((rgx) => rgx.test(lower));
 
   if (hasActionVerb) {
     taskScore += 15;
-    pros.push('Mệnh lệnh hành động rõ ràng');
+    pros.push('Mệnh lệnh và nhiệm vụ hành động rõ ràng (Task/Instruction)');
   } else {
-    missing.push('Thiếu động từ hành động dứt khoát');
+    missing.push('Thiếu động từ hành động dứt khoát (VD: "Implement", "Phân tích", "Tạo...")');
   }
 
   if (hasSteps || wordCount > 35) {
     taskScore += 10;
-    pros.push('Có chia nhỏ các bước hoặc hướng dẫn tư duy logic');
+    pros.push('Có phân rã các bước hoặc hướng dẫn tư duy logic (Step-by-step / CoT)');
   } else {
-    missing.push('Nhiệm vụ còn chung chung, nên chia theo các bước (Step-by-step)');
+    missing.push('Nhiệm vụ còn chung chung, nên chia theo các bước cụ thể (Step 1, Step 2...)');
   }
 
-  // 3. Constraints & Negatives (Tối đa 20 điểm)
-  const hasNegative = /(không được|tránh|cấm|đừng|tuyệt đối không|do not|don't|avoid|never|no \w+|negative prompt)/i.test(lower);
-  const hasLimits = /(tối đa|giới hạn|độ dài|khoảng|trong vòng|tone|giọng điệu|limit|max|words|concise|detailed)/i.test(lower);
+  // =========================================================================
+  // 3. CONSTRAINTS & NEGATIVES (Tối đa 20 điểm)
+  // Rào chắn tiêu cực, negative prompt, giới hạn độ dài/tone
+  // =========================================================================
+  const negativePatterns = [
+    /\[negative[^\]]*\]/i,
+    /\[constraints?[^\]]*\]/i,
+    /\[rules?[^\]]*\]/i,
+    /\[guardrails?[^\]]*\]/i,
+    /constraints?\s*:/i,
+    /rules?\s*:/i,
+    /negative\s*prompt\s*:/i,
+    // Tiếng Việt
+    /không được/i,
+    /tránh/i,
+    /cấm/i,
+    /đừng/i,
+    /tuyệt đối không/i,
+    /hạn chế/i,
+    // Tiếng Anh
+    /do not/i,
+    /don't/i,
+    /avoid/i,
+    /never/i,
+    /strictly avoid/i,
+    /must not/i,
+    /shall not/i,
+    /exclude/i,
+    /without/i,
+    /prohibited/i,
+    /--no/i,
+    /lowres/i,
+    /bad anatomy/i,
+    /blurry/i,
+    /watermark/i,
+    /deformed/i,
+    /artifacts/i
+  ];
+
+  const limitPatterns = [
+    /\[tone[^\]]*\]/i,
+    /\[style[^\]]*\]/i,
+    /tone\s*:/i,
+    /style\s*:/i,
+    // Tiếng Việt
+    /tối đa/i,
+    /giới hạn/i,
+    /độ dài/i,
+    /khoảng/i,
+    /trong vòng/i,
+    /giọng điệu/i,
+    /ngắn gọn/i,
+    /súc tích/i,
+    // Tiếng Anh
+    /limit/i,
+    /max\s+/i,
+    /maximum/i,
+    /word count/i,
+    /concise/i,
+    /detailed/i,
+    /objective/i,
+    /rigorous/i,
+    /professional/i,
+    /academic/i,
+    /friendly/i,
+    /formal/i
+  ];
+
+  const hasNegative = negativePatterns.some((rgx) => rgx.test(lower));
+  const hasLimits = limitPatterns.some((rgx) => rgx.test(lower));
 
   if (hasNegative) {
     constraintScore += 10;
-    pros.push('Có quy định điều cấm kỵ (Negative constraints)');
+    pros.push('Có quy định điều cấm kỵ / Rào chắn lỗi (Negative constraints / Guardrails)');
   } else {
-    missing.push('Chưa có danh sách điều KHÔNG ĐƯỢC LÀM để tránh AI suy diễn sai');
+    missing.push('Chưa có danh sách điều KHÔNG ĐƯỢC LÀM (Negative rules) để tránh AI suy diễn sai');
   }
 
   if (hasLimits) {
     constraintScore += 10;
-    pros.push('Có giới hạn độ dài hoặc quy chuẩn phong cách');
+    pros.push('Có giới hạn độ dài, tiêu chuẩn phong cách hoặc giọng điệu (Tone & Limits)');
   } else {
-    missing.push('Thiếu giới hạn dung lượng hoặc quy định về giọng điệu');
+    missing.push('Thiếu quy định về giới hạn độ dài hoặc giọng điệu');
   }
 
-  // 4. Output Format (Tối đa 20 điểm)
-  const hasFormat = /(json|markdown|bảng|table|bullet points|schema|danh sách|định dạng|format:|code block|--ar|tỷ lệ)/i.test(lower);
-  const hasStrictFormat = /(chỉ trả về|không giải thích thêm|only return|no preamble|strict json|output schema)/i.test(lower);
+  // =========================================================================
+  // 4. OUTPUT FORMAT & SCHEMA (Tối đa 20 điểm)
+  // Định dạng dữ liệu đầu ra và ràng buộc không trả về lời chào hỏi
+  // =========================================================================
+  const formatPatterns = [
+    /\[output[^\]]*\]/i,
+    /\[deliverable[^\]]*\]/i,
+    /\[schema[^\]]*\]/i,
+    /\[parameters?[^\]]*\]/i,
+    /output\s*(format|schema)?\s*:/i,
+    /format\s*:/i,
+    /schema\s*:/i,
+    // Tiếng Việt
+    /định dạng/i,
+    /bảng/i,
+    /danh sách/i,
+    /mẫu json/i,
+    /khung code/i,
+    /tỷ lệ khung hình/i,
+    // Tiếng Anh & Định dạng chuẩn
+    /json/i,
+    /markdown/i,
+    /table/i,
+    /bullet points?/i,
+    /csv/i,
+    /yaml/i,
+    /code block/i,
+    /pydantic/i,
+    /typescript interface/i,
+    /schema/i,
+    /fenced code/i,
+    /mermaid/i,
+    /--ar/i,
+    /aspect ratio/i
+  ];
+
+  const strictFormatPatterns = [
+    // Tiếng Việt
+    /chỉ trả về/i,
+    /không giải thích thêm/i,
+    /không chào hỏi/i,
+    /không lan man/i,
+    /chỉ xuất ra/i,
+    // Tiếng Anh
+    /only return/i,
+    /return only/i,
+    /no preamble/i,
+    /no explanation/i,
+    /no conversational filler/i,
+    /strict json/i,
+    /raw json/i,
+    /output only/i,
+    /without intro/i,
+    /pure code/i,
+    /just the code/i
+  ];
+
+  const hasFormat = formatPatterns.some((rgx) => rgx.test(lower));
+  const hasStrictFormat = strictFormatPatterns.some((rgx) => rgx.test(lower));
 
   if (hasFormat) {
     formatScore += 12;
-    pros.push('Có chỉ định cấu trúc định dạng đầu ra');
+    pros.push('Có chỉ định cấu trúc định dạng đầu ra (Output Format / Schema)');
   } else {
-    missing.push('Chưa yêu cầu rõ định dạng output (Markdown table, JSON hay Code)');
+    missing.push('Chưa yêu cầu rõ định dạng output (VD: Markdown table, JSON Schema, hoặc Code block)');
   }
 
   if (hasStrictFormat) {
     formatScore += 8;
-    pros.push('Có ràng buộc nghiêm ngặt chỉ trả về format mong muốn');
+    pros.push('Có ràng buộc nghiêm ngặt chỉ trả về format mong muốn (Strict Output)');
   } else {
-    missing.push('Nên thêm yêu cầu "Chỉ trả về kết quả, không chào hỏi lan man"');
+    missing.push('Nên thêm yêu cầu "Chỉ trả về kết quả, không chào hỏi lan man" (Only return...)');
   }
 
-  // 5. Examples & Technical Specs (Tối đa 15 điểm)
+  // =========================================================================
+  // 5. EXAMPLES & TECHNICAL SPECS (Tối đa 15 điểm)
+  // Nhận diện tham số kỹ thuật chuyên ngành đa phương thức
+  // =========================================================================
   let domainSpecsBonus = false;
+
   if (domain === 'image') {
-    domainSpecsBonus = /(--ar|--v|aspect ratio|lighting|8k|lens|unreal engine|octane|cinematic|photorealistic|dslr)/i.test(lower);
+    domainSpecsBonus = /(shot on|hasselblad|canon|sony|nikon|lens|85mm|35mm|50mm|16mm|f\/1\.[0-9]|f\/2\.[0-9]|bokeh|depth of field|volumetric|golden hour|chiaroscuro|lighting|8k|4k|uhd|photorealistic|hyper-realistic|octane|unreal engine|--ar|--v|--style|aspect ratio|close-up|portrait)/i.test(lower);
   } else if (domain === 'video') {
-    domainSpecsBonus = /(camera|pan|tilt|dolly|zoom|fps|motion|cinematic|first frame|last frame|4k|wide shot)/i.test(lower);
+    domainSpecsBonus = /(camera movement|dolly|pan|tilt|zoom|fpv|drone|tracking shot|fps|24fps|60fps|motion speed|motion factor|cinematic|aspect ratio|2\.39:1|16:9|first frame|last frame|parallax|temporal)/i.test(lower);
   } else if (domain === 'code') {
-    domainSpecsBonus = /(typescript|python|golang|rust|react|api|docker|unit test|benchmark|async\/await|error handling)/i.test(lower);
+    domainSpecsBonus = /(typescript|python|golang|rust|c\+\+|java|react|fastapi|docker|clean architecture|solid|pydantic|pytest|jest|unit test|benchmark|async\/await|error handling|type hints|docstrings|ast)/i.test(lower);
   } else if (domain === 'audio') {
-    domainSpecsBonus = /(\[verse\]|\[chorus\]|bpm|key|vocal|tempo|genre|acoustic|electronic)/i.test(lower);
+    domainSpecsBonus = /(\[intro[^\]]*\]|\[verse[^\]]*\]|\[chorus[^\]]*\]|\[bridge[^\]]*\]|\[outro[^\]]*\]|bpm|key of|tempo|acoustic|guitar|piano|lo-fi|vinyl|reverb|vocals|suno|udio)/i.test(lower);
   } else {
-    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|chẳng hạn)/i.test(lower);
+    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|sample:|chẳng hạn|empirical data|metrics|cagr|swot)/i.test(lower);
   }
 
-  if (domainSpecsBonus) {
+  // Kiểm tra Few-shot example chung
+  const hasExamples = /(ví dụ|example|few-shot|mẫu input|mẫu output|sample input|sample output|e\.g\.|for instance)/i.test(lower);
+
+  if (domainSpecsBonus || hasExamples) {
     specsScore = 15;
-    pros.push(`Đã tích hợp các tham số đặc thù của chuyên ngành ${domain.toUpperCase()}`);
+    pros.push(`Đã tích hợp đầy đủ tham số kỹ thuật / ví dụ mẫu chuyên ngành ${domain.toUpperCase()}`);
   } else {
-    specsScore = wordCount > 50 ? 5 : 0;
+    specsScore = wordCount > 45 ? 6 : 0;
     if (domain === 'image' || domain === 'video') {
-      missing.push('Thiếu tham số kỹ thuật hình ảnh/camera (Ánh sáng, góc quay, tỷ lệ --ar)');
+      missing.push('Thiếu tham số kỹ thuật hình ảnh/camera (Lens, Ánh sáng, Tỷ lệ --ar, hoặc Chuyển động camera)');
     } else if (domain === 'code') {
-      missing.push('Thiếu phiên bản công nghệ, cấu trúc file hoặc yêu cầu unit test mẫu');
+      missing.push('Thiếu phiên bản công nghệ cụ thể, cấu trúc module hoặc yêu cầu Unit Test');
     } else {
-      missing.push('Chưa có ví dụ đầu vào/đầu ra mẫu (Few-shot learning)');
+      missing.push('Chưa có ví dụ đầu vào/đầu ra mẫu (Few-shot learning hoặc Input/Output sample)');
     }
   }
 
@@ -166,12 +433,12 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
   const clean = original.trim();
   switch (domain) {
     case 'image':
-      return `[ROLE]: World-renowned commercial photographer and digital artist.
+      return `[ROLE]: World-renowned commercial photographer and digital concept artist.
 [SUBJECT & SCENE]: ${clean}
 [ENVIRONMENT & LIGHTING]: Volumetric cinematic lighting, golden hour rim lights, soft diffused shadows, atmospheric particles.
 [CAMERA & SPECS]: Shot on Hasselblad H6D-100c, 85mm f/1.4 lens, shallow depth of field, sharp hyper-detailed focus, 8K UHD.
 [NEGATIVE PROMPT / CONSTRAINTS]: blur, low resolution, bad anatomy, deformed limbs, artifacts, watermark, oversaturated.
-[PARAMETERS]: --ar 16:9 --style raw --v 6.1`;
+[PARAMETERS]: --ar 16:9 --style raw --v 6.1 --stop 100`;
 
     case 'video':
       return `[ROLE]: Hollywood Director of Photography and VFX Artist.
@@ -234,14 +501,14 @@ export async function evaluatePromptWithGemini(
   const systemInstruction = `
 Bạn là chuyên gia thẩm định và tối ưu Prompt (Master Prompt Architect & Evaluator).
 Nhiệm vụ của bạn là nhận vào một Prompt từ người dùng thuộc lĩnh vực: "${domain.toUpperCase()}".
-Hãy thẩm định khắt khe theo bộ quy tắc tiền tố 100 điểm, chỉ ra điểm mạnh, điểm thiếu sót, và tự mình viết lại một phiên bản Prompt nâng cấp HOÀN HẢO (đạt 95-100 điểm) áp dụng đầy đủ các kỹ thuật chuyên sâu (Role, Clear Task, Constraints, Output Schema, Technical Specs).
+Prompt có thể được viết bằng TIẾNG ANH, TIẾNG VIỆT, HOẶC SONG NGỮ KÈM CÁC THẺ KỸ THUẬT ([ROLE], [TASK], [CONSTRAINTS], [PARAMETERS]...).
 
-### Thang điểm đánh giá:
-1. role_context (Tối đa 20đ): Vai trò chuyên môn và ngữ cảnh thực tế.
-2. task_clarity (Tối đa 25đ): Mệnh lệnh rõ ràng, chia nhỏ các bước logic.
-3. constraints (Tối đa 20đ): Quy tắc cấm kỵ (Negative rules), giới hạn độ dài, giọng điệu.
-4. output_format (Tối đa 20đ): Định dạng output chặt chẽ (JSON, Markdown, cấu trúc thẻ).
-5. examples_specs (Tối đa 15đ): Ví dụ mẫu Few-shot hoặc tham số chuyên ngành (camera, lens, aspect ratio, code stack).
+HÃY THẨM ĐỊNH KHẮT KHE THEO BỘ QUY TẮC TIỀN TỐ 100 ĐIỂM DỰA TRÊN NỘI DUNG THỰC TẾ (BẤT KỂ NGÔN NGỮ NÀO):
+1. role_context (Tối đa 20đ): Có vai trò chuyên môn (Role/Persona) và bối cảnh (Context/Objective) không? (Dù viết bằng tiếng Anh như "[ROLE]: Master Artist" hay tiếng Việt).
+2. task_clarity (Tối đa 25đ): Mệnh lệnh hành động rõ ràng (Task/Instruction) và có chia nhỏ các bước logic (CoT/Step-by-step) không?
+3. constraints (Tối đa 20đ): Có quy tắc cấm kỵ (Negative rules / Negative prompt), giới hạn độ dài, phong cách giọng điệu không?
+4. output_format (Tối đa 20đ): Có định dạng output chặt chẽ (JSON Schema, Markdown table, cấu trúc thẻ, hoặc tỷ lệ khung hình) không?
+5. examples_specs (Tối đa 15đ): Có ví dụ mẫu Few-shot hoặc tham số chuyên ngành (camera, lens, aspect ratio, tech stack) không?
 
 BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON với cấu trúc:
 {
@@ -255,8 +522,8 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON với cấu trúc:
     "examples_specs": <0-15>
   },
   "critique": {
-    "pros": ["Điểm mạnh 1", "Điểm mạnh 2"],
-    "missing": ["Điểm thiếu sót 1", "Điểm thiếu sót 2"]
+    "pros": ["Điểm mạnh 1 (viết bằng tiếng Việt)", "Điểm mạnh 2"],
+    "missing": ["Điểm thiếu sót 1 (nêu rõ nếu còn thiếu)", "Điểm thiếu sót 2"]
   },
   "improved_prompt": "<Nội dung prompt đã được tối ưu hoàn thiện 95-100 điểm, chuyên nghiệp, sẵn sàng copy vào model đích>",
   "target_domain": "${domain}"
