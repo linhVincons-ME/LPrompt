@@ -8,6 +8,7 @@ import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
 import { DomainToolbar } from './components/DomainToolbar';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { SavedLibraryModal } from './components/SavedLibraryModal';
+import { PromptOptimizerView } from './components/PromptOptimizerView';
 import {
   Sparkles,
   Zap,
@@ -18,7 +19,8 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Info,
-  FileCheck
+  FileCheck,
+  Wand2
 } from 'lucide-react';
 
 const DEFAULT_CONFIG: GeminiConfig = {
@@ -29,6 +31,7 @@ const DEFAULT_CONFIG: GeminiConfig = {
 
 export function App() {
   const [currentDomain, setCurrentDomain] = useState<PromptDomain>('research');
+  const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer'); // Default to Optimizer as requested!
   const [rawPrompt, setRawPrompt] = useState<string>('');
   const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(null);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
@@ -94,7 +97,6 @@ export function App() {
       setEvaluation(result);
     } catch (err: any) {
       setAuditError(err.message || 'Lỗi kết nối Gemini API. Hãy kiểm tra lại API Key hoặc hạn mức.');
-      // Fallback to local evaluation
       handleLocalEvaluate();
     } finally {
       setIsAuditing(false);
@@ -146,226 +148,253 @@ export function App() {
           setRawPrompt('');
           setEvaluation(null);
         }}
+        activeView={activeView}
+        onSelectView={setActiveView}
         onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
         onOpenLibraryModal={() => setIsLibraryOpen(true)}
         savedCount={savedPrompts.length}
       />
 
       {/* Main Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LEFT COLUMN: Input Composer (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Sample Selector & Toolbar Header */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
-                  Mẫu Thử Nghiệm ({currentDomain}):
-                </span>
-              </div>
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+        {/* VIEW 1: GEMINI PRO PROMPT OPTIMIZER */}
+        {activeView === 'optimizer' ? (
+          <PromptOptimizerView
+            currentPrompt={rawPrompt}
+            domain={currentDomain}
+            config={config}
+            onApplyImproved={(newPrompt) => {
+              setRawPrompt(newPrompt);
+              handleLocalEvaluate(newPrompt);
+              setActiveView('evaluator');
+            }}
+            onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
+          />
+        ) : (
+          /* VIEW 2: EVALUATOR & SCORING WORKSPACE */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT COLUMN: Input Composer (7 Cols) */}
+            <div className="lg:col-span-7 flex flex-col gap-4">
+              {/* Sample Selector & Toolbar Header */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+                      Mẫu Thử Nghiệm ({currentDomain}):
+                    </span>
+                  </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {currentSamples.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setRawPrompt(s.prompt);
-                      handleLocalEvaluate(s.prompt);
-                    }}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border border-slate-700/60 transition-colors"
-                  >
-                    {s.title.split('(')[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Tag Injector */}
-            <DomainToolbar
-              domain={currentDomain}
-              onInsertTag={(tag) => {
-                const next = rawPrompt + tag;
-                setRawPrompt(next);
-                handleLocalEvaluate(next);
-              }}
-            />
-          </div>
-
-          {/* Text Area Input */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 flex-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
-                <label className="text-xs font-bold text-slate-200 uppercase tracking-wide">
-                  Prompt Cần Đánh Giá & Tối Ưu
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3 text-xs text-slate-400">
-                <span>{rawPrompt ? rawPrompt.trim().split(/\s+/).length : 0} từ</span>
-                <span>•</span>
-                <span>{rawPrompt.length} ký tự</span>
-                {rawPrompt && (
-                  <button
-                    onClick={() => handleCopy(rawPrompt, 'original')}
-                    className="p-1 hover:text-white transition-colors"
-                    title="Sao chép"
-                  >
-                    {copiedOriginal ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-                {rawPrompt && (
-                  <button
-                    onClick={() => {
-                      setRawPrompt('');
-                      setEvaluation(null);
-                    }}
-                    className="p-1 hover:text-rose-400 transition-colors"
-                    title="Xóa trắng"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <textarea
-              value={rawPrompt}
-              onChange={(e) => {
-                setRawPrompt(e.target.value);
-                handleLocalEvaluate(e.target.value);
-              }}
-              placeholder={`Nhập prompt cho ${currentDomain.toUpperCase()} tại đây... (Ví dụ: "Viết đoạn code crawler giá vàng...", "Chân dung thiếu nữ cyberpunk 8k...")`}
-              className="w-full flex-1 min-h-[220px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 transition-colors resize-y"
-            />
-
-            {/* Error banner if any */}
-            {auditError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
-                <span>{auditError}</span>
-                <button
-                  onClick={() => setIsApiKeyOpen(true)}
-                  className="underline font-semibold hover:text-white"
-                >
-                  Kiểm tra API Key
-                </button>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => handleLocalEvaluate()}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
-              >
-                <Zap className="w-4 h-4 text-amber-400" />
-                <span>Chấm Điểm Nhanh (Local 0đ)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleGeminiAudit}
-                disabled={isAuditing}
-                className="flex-1 min-w-[200px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-90 text-white text-xs font-bold transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-              >
-                <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
-                <span>
-                  {isAuditing
-                    ? `Đang thẩm định bằng ${config.model}...`
-                    : `⚡ Nâng Cấp 95+ Điểm Với ${config.model}`}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Improved Output Panel */}
-          {evaluation && evaluation.improved_prompt && (
-            <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 shadow-xl shadow-indigo-950/40 animate-fade-in">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <FileCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    Phiên Bản Nâng Cấp Chuẩn Hóa (95 - 100 Điểm)
-                  </span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {currentSamples.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setRawPrompt(s.prompt);
+                          handleLocalEvaluate(s.prompt);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border border-slate-700/60 transition-colors"
+                      >
+                        {s.title.split('(')[0]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Quick Tag Injector */}
+                <DomainToolbar
+                  domain={currentDomain}
+                  onInsertTag={(tag) => {
+                    const next = rawPrompt + tag;
+                    setRawPrompt(next);
+                    handleLocalEvaluate(next);
+                  }}
+                />
+              </div>
+
+              {/* Text Area Input */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <label className="text-xs font-bold text-slate-200 uppercase tracking-wide">
+                      Prompt Cần Đánh Giá & Tối Ưu
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <span>{rawPrompt ? rawPrompt.trim().split(/\s+/).length : 0} từ</span>
+                    <span>•</span>
+                    <span>{rawPrompt.length} ký tự</span>
+                    {rawPrompt && (
+                      <button
+                        onClick={() => handleCopy(rawPrompt, 'original')}
+                        className="p-1 hover:text-white transition-colors"
+                        title="Sao chép"
+                      >
+                        {copiedOriginal ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                    {rawPrompt && (
+                      <button
+                        onClick={() => {
+                          setRawPrompt('');
+                          setEvaluation(null);
+                        }}
+                        className="p-1 hover:text-rose-400 transition-colors"
+                        title="Xóa trắng"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <textarea
+                  value={rawPrompt}
+                  onChange={(e) => {
+                    setRawPrompt(e.target.value);
+                    handleLocalEvaluate(e.target.value);
+                  }}
+                  placeholder={`Nhập prompt cho ${currentDomain.toUpperCase()} tại đây... (Ví dụ: "Viết đoạn code crawler giá vàng...", "Chân dung thiếu nữ cyberpunk 8k...")`}
+                  className="w-full flex-1 min-h-[200px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 transition-colors resize-y"
+                />
+
+                {/* Error banner if any */}
+                {auditError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+                    <span>{auditError}</span>
+                    <button
+                      onClick={() => setIsApiKeyOpen(true)}
+                      className="underline font-semibold hover:text-white"
+                    >
+                      Kiểm tra API Key
+                    </button>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
                   <button
-                    onClick={() => {
-                      setRawPrompt(evaluation.improved_prompt);
-                      handleLocalEvaluate(evaluation.improved_prompt);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
-                    title="Ghi đè bản tối ưu vào khung soạn thảo"
+                    type="button"
+                    onClick={() => handleLocalEvaluate()}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
                   >
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
-                    <span>Dùng bản này</span>
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span>Chấm Điểm Cục Bộ (0đ)</span>
                   </button>
 
                   <button
-                    onClick={handleSavePrompt}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-medium transition-colors"
+                    type="button"
+                    onClick={() => setActiveView('optimizer')}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/30"
                   >
-                    <BookmarkPlus className="w-3.5 h-3.5" />
-                    <span>Lưu</span>
+                    <Wand2 className="w-4 h-4 text-pink-200" />
+                    <span>Đưa Sang Gemini Pro Tối Ưu</span>
                   </button>
 
                   <button
-                    onClick={() => handleCopy(evaluation.improved_prompt, 'improved')}
-                    className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-md shadow-emerald-600/20"
+                    type="button"
+                    onClick={handleGeminiAudit}
+                    disabled={isAuditing}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30 disabled:opacity-50"
                   >
-                    {copiedImproved ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedImproved ? 'Đã chép!' : '1-Click Copy'}</span>
+                    <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isAuditing ? 'Đang chấm điểm...' : `Chấm Điểm Với ${config.model}`}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-indigo-100 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto selection:bg-indigo-500/40">
-                {evaluation.improved_prompt}
-              </div>
+              {/* Improved Output Panel */}
+              {evaluation && evaluation.improved_prompt && (
+                <div className="bg-slate-900/90 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-3 shadow-xl shadow-indigo-950/40 animate-fade-in">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileCheck className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Phiên Bản Nâng Cấp Chuẩn Hóa (95 - 100 Điểm)
+                      </span>
+                    </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Info className="w-3 h-3 text-indigo-400" />
-                  Đã bổ sung đầy đủ: Vai trò, Ngữ cảnh, Ràng buộc cấm kỵ, Format Schema & Thông số kỹ thuật.
-                </span>
-                <span className="font-mono text-emerald-400 font-semibold">Ready for Production</span>
-              </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setRawPrompt(evaluation.improved_prompt);
+                          handleLocalEvaluate(evaluation.improved_prompt);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+                        title="Ghi đè bản tối ưu vào khung soạn thảo"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>Dùng bản này</span>
+                      </button>
+
+                      <button
+                        onClick={handleSavePrompt}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-medium transition-colors"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" />
+                        <span>Lưu</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleCopy(evaluation.improved_prompt, 'improved')}
+                        className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-md shadow-emerald-600/20"
+                      >
+                        {copiedImproved ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedImproved ? 'Đã chép!' : '1-Click Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-indigo-100 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto selection:bg-indigo-500/40">
+                    {evaluation.improved_prompt}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Info className="w-3 h-3 text-indigo-400" />
+                      Đã bổ sung đầy đủ: Vai trò, Ngữ cảnh, Ràng buộc cấm kỵ, Format Schema & Thông số kỹ thuật.
+                    </span>
+                    <span className="font-mono text-emerald-400 font-semibold">Ready for Production</span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* RIGHT COLUMN: Scoring & Diagnostics (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          {/* Radial Score Gauge */}
-          <ScoreGauge
-            score={evaluation ? evaluation.total_score : 0}
-            tier={evaluation ? evaluation.tier : 'Yếu'}
-            source={evaluation ? evaluation.source : 'local'}
-            isAuditing={isAuditing}
-          />
+            {/* RIGHT COLUMN: Scoring & Diagnostics (5 Cols) */}
+            <div className="lg:col-span-5 flex flex-col gap-4">
+              {/* Radial Score Gauge */}
+              <ScoreGauge
+                score={evaluation ? evaluation.total_score : 0}
+                tier={evaluation ? evaluation.tier : 'Yếu'}
+                source={evaluation ? evaluation.source : 'local'}
+                isAuditing={isAuditing}
+              />
 
-          {/* Breakdown by 5 Criteria & Diagnostic List */}
-          <ScoreBreakdownCard
-            breakdown={
-              evaluation?.breakdown || {
-                role_context: 0,
-                task_clarity: 0,
-                constraints: 0,
-                output_format: 0,
-                examples_specs: 0
-              }
-            }
-            critique={
-              evaluation?.critique || {
-                pros: [],
-                missing: ['Nhập prompt vào khung bên trái để bắt đầu thẩm định.']
-              }
-            }
-          />
-        </div>
+              {/* Breakdown by 5 Criteria & Diagnostic List */}
+              <ScoreBreakdownCard
+                breakdown={
+                  evaluation?.breakdown || {
+                    role_context: 0,
+                    task_clarity: 0,
+                    constraints: 0,
+                    output_format: 0,
+                    examples_specs: 0
+                  }
+                }
+                critique={
+                  evaluation?.critique || {
+                    pros: [],
+                    missing: ['Nhập prompt vào khung bên trái để bắt đầu thẩm định.']
+                  }
+                }
+              />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modals */}

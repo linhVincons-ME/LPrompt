@@ -8,12 +8,16 @@ import {
   Image as ImageIcon,
   Film,
   Code2,
-  Music2
+  Music2,
+  Gauge,
+  Wand2
 } from 'lucide-react';
 
 interface HeaderProps {
   currentDomain: PromptDomain;
   onSelectDomain: (domain: PromptDomain) => void;
+  activeView: 'evaluator' | 'optimizer';
+  onSelectView: (view: 'evaluator' | 'optimizer') => void;
   onOpenApiKeyModal: () => void;
   onOpenLibraryModal: () => void;
   savedCount: number;
@@ -22,6 +26,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentDomain,
   onSelectDomain,
+  activeView,
+  onSelectView,
   onOpenApiKeyModal,
   onOpenLibraryModal,
   savedCount
@@ -55,22 +61,30 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Domain Navigation Tabs */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-          {domains.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => onSelectDomain(d.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                currentDomain === d.id
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              {d.icon}
-              <span className="hidden sm:inline">{d.label}</span>
-            </button>
-          ))}
+        {/* View Switcher: Evaluator vs Optimizer */}
+        <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 shadow-inner">
+          <button
+            onClick={() => onSelectView('evaluator')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'evaluator'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Gauge className="w-3.5 h-3.5" />
+            <span>Thẩm Định 100đ</span>
+          </button>
+          <button
+            onClick={() => onSelectView('optimizer')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'optimizer'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Wand2 className="w-3.5 h-3.5 text-pink-300" />
+            <span>Tối Ưu Gemini Pro</span>
+          </button>
         </div>
 
         {/* Action Buttons */}
@@ -98,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden md:inline">Cài đặt API Key</span>
           </button>
 
-          {/* GitHub Repo with SVG */}
+          {/* GitHub Repo */}
           <a
             href="https://github.com/linhVincons-ME/LPrompt"
             target="_blank"
@@ -110,6 +124,27 @@ export const Header: React.FC<HeaderProps> = ({
               <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
             </svg>
           </a>
+        </div>
+      </div>
+
+      {/* Domain Navigation Tabs Subheader */}
+      <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between border-t border-slate-800/60 overflow-x-auto">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mr-1">Chuyên mục:</span>
+          {domains.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => onSelectDomain(d.id)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                currentDomain === d.id
+                  ? 'bg-slate-800 text-indigo-300 border border-indigo-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              {d.icon}
+              <span>{d.label}</span>
+            </button>
+          ))}
         </div>
       </div>
     </header>
