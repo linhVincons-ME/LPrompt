@@ -12,7 +12,9 @@ import {
   Gauge,
   Wand2,
   Play,
-  Share2
+  Share2,
+  Shield,
+  History
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -24,6 +26,9 @@ interface HeaderProps {
   onOpenLibraryModal: () => void;
   onOpenPlayground: () => void;
   onOpenCodeExport: () => void;
+  onOpenSecurityScan: () => void;
+  onOpenVersionHistory: () => void;
+  versionCount: number;
   savedCount: number;
 }
 
@@ -36,6 +41,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLibraryModal,
   onOpenPlayground,
   onOpenCodeExport,
+  onOpenSecurityScan,
+  onOpenVersionHistory,
+  versionCount,
   savedCount
 }) => {
   const domains: { id: PromptDomain; label: string; icon: React.ReactNode }[] = [
@@ -59,11 +67,11 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white tracking-tight m-0 p-0 font-sans">LPrompt Studio</h1>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                PROMPTOPS v1.1
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30">
+                PROMPTOPS v1.2
               </span>
             </div>
-            <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, thẩm định & tối ưu hóa Prompt chuẩn 100 điểm với Gemini</p>
+            <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, bảo mật & kiểm soát phiên bản Prompt Git-Style</p>
           </div>
         </div>
 
@@ -94,11 +102,36 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Security Audit Button */}
+          <button
+            onClick={onOpenSecurityScan}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-bold text-rose-300 transition-colors shadow-sm"
+            title="Quét bảo mật Red-Teaming & Chống Prompt Injection"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Bảo Mật</span>
+          </button>
+
+          {/* Versions History Button */}
+          <button
+            onClick={onOpenVersionHistory}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
+            title="Lịch sử phiên bản (Git-Style)"
+          >
+            <History className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden md:inline">Lịch Sử</span>
+            {versionCount > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-purple-600 text-[10px] font-bold text-white">
+                {versionCount}
+              </span>
+            )}
+          </button>
+
           {/* Live Playground Button */}
           <button
             onClick={onOpenPlayground}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold text-emerald-300 transition-colors shadow-sm"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold text-emerald-300 transition-colors shadow-sm"
             title="Chạy thử nghiệm prompt ngay"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
@@ -108,20 +141,20 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Export Code Button */}
           <button
             onClick={onOpenCodeExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
             title="Xuất mã nguồn Python, TypeScript, cURL"
           >
             <Share2 className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden md:inline">Xuất Code</span>
+            <span className="hidden lg:inline">Xuất Code</span>
           </button>
 
           {/* Library Button */}
           <button
             onClick={onOpenLibraryModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
           >
             <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Kho</span>
+            <span className="hidden sm:inline">Kho</span>
             {savedCount > 0 && (
               <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-indigo-600 text-[10px] font-bold text-white">
                 {savedCount}
@@ -132,10 +165,10 @@ export const Header: React.FC<HeaderProps> = ({
           {/* API Key Settings Button */}
           <button
             onClick={onOpenApiKeyModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
           >
             <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden lg:inline">API Key</span>
+            <span className="hidden xl:inline">API Key</span>
           </button>
 
           {/* GitHub Repo */}
@@ -143,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
             href="https://github.com/linhVincons-ME/LPrompt"
             target="_blank"
             rel="noreferrer"
-            className="p-2 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
             title="Xem mã nguồn trên GitHub"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">

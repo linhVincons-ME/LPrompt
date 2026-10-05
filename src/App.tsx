@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { PromptDomain, PromptEvaluation, GeminiConfig, SavedPrompt } from './types';
+import type { PromptDomain, PromptEvaluation, GeminiConfig, SavedPrompt, PromptVersion, VersionStage } from './types';
 import { evaluatePromptLocally, evaluatePromptWithGemini } from './services/evaluator';
 import { SAMPLE_PROMPTS } from './data/samplePrompts';
 import { extractVariables, interpolateTemplate, getInitialVariableValues } from './utils/template';
@@ -13,6 +13,9 @@ import { PromptOptimizerView } from './components/PromptOptimizerView';
 import { VariableInputsPanel } from './components/VariableInputsPanel';
 import { LivePlaygroundModal } from './components/LivePlaygroundModal';
 import { CodeExportModal } from './components/CodeExportModal';
+import { VisualDiffModal } from './components/VisualDiffModal';
+import { RedTeamSecurityModal } from './components/RedTeamSecurityModal';
+import { VersionHistoryDrawer } from './components/VersionHistoryDrawer';
 import {
   Sparkles,
   Zap,
@@ -26,7 +29,10 @@ import {
   FileCheck,
   Wand2,
   Play,
-  Share2
+  Share2,
+  GitCompare,
+  Shield,
+  History
 } from 'lucide-react';
 
 const DEFAULT_CONFIG: GeminiConfig = {
@@ -57,6 +63,15 @@ export function App() {
   const [isCodeExportOpen, setIsCodeExportOpen] = useState<boolean>(false);
   const [codeExportPrompt, setCodeExportPrompt] = useState<string>('');
 
+  // v1.2 Versioning & Security & Visual Diff Modals
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
+  const [isVersionDrawerOpen, setIsVersionDrawerOpen] = useState<boolean>(false);
+  const [isDiffModalOpen, setIsDiffModalOpen] = useState<boolean>(false);
+  const [diffOriginal, setDiffOriginal] = useState<string>('');
+  const [diffModified, setDiffModified] = useState<string>('');
+  const [diffOriginalLabel, setDiffOriginalLabel] = useState<string>('Bản gốc');
+  const [diffModifiedLabel, setDiffModifiedLabel] = useState<string>('Bản tối ưu');
+
   // Config & Storage
   const [config, setConfig] = useState<GeminiConfig>(() => {
     const saved = localStorage.getItem('lprompt_gemini_config');
@@ -65,6 +80,11 @@ export function App() {
 
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>(() => {
     const saved = localStorage.getItem('lprompt_saved_prompts');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [versions, setVersions] = useState<PromptVersion[]>(() => {
+    const saved = localStorage.getItem('lprompt_versions');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -174,6 +194,59 @@ export function App() {
     alert('Đã lưu prompt vào thư viện cá nhân!');
   };
 
+  // v1.2 Versioning handlers
+  const handleSaveVersions = (updated: PromptVersion[]) => {
+    setVersions(updated);
+    localStorage.setItem('lprompt_versions', JSON.stringify(updated));
+  };
+
+  const handleCommitVersion = (message: string, stage: VersionStage, promptContent: string) => {
+    const versionNum = `v1.${versions.length}`;
+    const newVer: PromptVersion = {
+      id: `ver-${Date.now()}`,
+      versionNumber: versionNum,
+      commitMessage: message.trim() || `Cập nhật ${versionNum}`,
+      content: promptContent,
+      stage: stage,
+      score: evaluation?.total_score,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newVer, ...versions];
+    handleSaveVersions(updated);
+  };
+
+  const handleDeleteVersion = (versionId: string) => {
+    const updated = versions.filter((v) => v.id !== versionId);
+    handleSaveVersions(updated);
+  };
+
+  const handleRollbackVersion = (version: PromptVersion) => {
+    setRawPrompt(version.content);
+    handleLocalEvaluate(version.content);
+    setIsVersionDrawerOpen(false);
+  };
+
+  const handleCompareWithCurrent = (version: PromptVersion) => {
+    setDiffOriginal(version.content);
+    setDiffModified(rawPrompt);
+    setDiffOriginalLabel(`${version.versionNumber} (${version.stage})`);
+    setDiffModifiedLabel('Nội dung hiện tại');
+    setIsDiffModalOpen(true);
+  };
+
+  const handleOpenVisualDiff = (
+    orig: string,
+    mod: string,
+    origLabel = 'Prompt Gốc',
+    modLabel = 'Prompt Tối Ưu'
+  ) => {
+    setDiffOriginal(orig);
+    setDiffModified(mod);
+    setDiffOriginalLabel(origLabel);
+    setDiffModifiedLabel(modLabel);
+    setIsDiffModalOpen(true);
+  };
+
   const currentSamples = SAMPLE_PROMPTS.filter((s) => s.domain === currentDomain);
 
   return (
@@ -192,6 +265,9 @@ export function App() {
         onOpenLibraryModal={() => setIsLibraryOpen(true)}
         onOpenPlayground={() => handleOpenPlaygroundWith()}
         onOpenCodeExport={() => handleOpenCodeExportWith()}
+        onOpenSecurityScan={() => setIsSecurityModalOpen(true)}
+        onOpenVersionHistory={() => setIsVersionDrawerOpen(true)}
+        versionCount={versions.length}
         savedCount={savedPrompts.length}
       />
 
@@ -211,6 +287,7 @@ export function App() {
             onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
             onOpenPlayground={(p) => handleOpenPlaygroundWith(p)}
             onOpenCodeExport={(p) => handleOpenCodeExportWith(p)}
+            onOpenVisualDiff={(orig, mod) => handleOpenVisualDiff(orig, mod, 'Prompt Gốc', 'Gemini Pro Tối Ưu')}
           />
         ) : (
           /* VIEW 2: EVALUATOR & SCORING WORKSPACE */
@@ -358,6 +435,26 @@ export function App() {
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Chạy Thử</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsSecurityModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold transition-colors"
+                      title="Quét lỗ hổng bảo mật Red-Teaming (OWASP LLM Top 10)"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Quét Bảo Mật</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsVersionDrawerOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs font-bold transition-colors"
+                      title="Quản lý lịch sử phiên bản Git-style"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>Phiên Bản ({versions.length})</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -413,6 +510,15 @@ export function App() {
                       >
                         <Share2 className="w-3.5 h-3.5 text-sky-400" />
                         <span>Xuất Code</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenVisualDiff(rawPrompt, evaluation.improved_prompt, 'Prompt Hiện Tại', 'Bản Nâng Cấp 100đ')}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-950/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-300 hover:text-white text-xs font-medium transition-colors"
+                        title="So sánh chi tiết thay đổi (Word-level Diff)"
+                      >
+                        <GitCompare className="w-3.5 h-3.5 text-purple-400" />
+                        <span>So sánh Diff</span>
                       </button>
 
                       <button
@@ -532,6 +638,43 @@ export function App() {
         interpolatedPrompt={interpolateTemplate(codeExportPrompt, variableValues)}
         hasVariables={variables.length > 0}
         config={config}
+      />
+
+      {/* v1.2 Modals: Red-Teaming, Version History, Visual Diff */}
+      <RedTeamSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        prompt={interpolateTemplate(rawPrompt, variableValues) || rawPrompt}
+        config={config}
+        onApplyPatchedPrompt={(patched) => {
+          setRawPrompt(patched);
+          handleLocalEvaluate(patched);
+        }}
+      />
+
+      <VersionHistoryDrawer
+        isOpen={isVersionDrawerOpen}
+        onClose={() => setIsVersionDrawerOpen(false)}
+        versions={versions}
+        currentPrompt={rawPrompt}
+        onCommitNewVersion={(message, stage) => handleCommitVersion(message, stage, rawPrompt)}
+        onRollbackToVersion={handleRollbackVersion}
+        onCompareWithVersion={handleCompareWithCurrent}
+        onDeleteVersion={handleDeleteVersion}
+      />
+
+      <VisualDiffModal
+        isOpen={isDiffModalOpen}
+        onClose={() => setIsDiffModalOpen(false)}
+        originalText={diffOriginal}
+        modifiedText={diffModified}
+        originalLabel={diffOriginalLabel}
+        modifiedLabel={diffModifiedLabel}
+        onApplyModified={(text: string) => {
+          setRawPrompt(text);
+          handleLocalEvaluate(text);
+          setIsDiffModalOpen(false);
+        }}
       />
     </div>
   );

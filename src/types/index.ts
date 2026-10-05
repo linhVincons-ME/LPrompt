@@ -57,3 +57,41 @@ export interface PromptExecutionResult {
 }
 
 export type ExportLanguage = 'python' | 'typescript' | 'curl' | 'json';
+
+// ==========================================
+// V1.2 PROMPTOPS, VERSIONING & RED-TEAMING
+// ==========================================
+
+export type VersionStage = 'draft' | 'testing' | 'production';
+
+export interface PromptVersion {
+  id: string;
+  versionNumber: string; // e.g. "v1.0", "v1.1", "v2.0"
+  content: string;
+  commitMessage: string;
+  stage: VersionStage;
+  score?: number;
+  createdAt: string;
+}
+
+export interface SecurityCheckItem {
+  id: string;
+  category: 'injection_defense' | 'leakage_defense' | 'hallucination_defense' | 'jailbreak_defense';
+  title: string;
+  status: 'pass' | 'warning' | 'fail';
+  description: string;
+  recommendation: string;
+}
+
+export interface RedTeamSecurityReport {
+  safetyScore: number; // 0 - 100
+  riskLevel: 'An toàn' | 'Rủi ro trung bình' | 'Nguy cơ cao';
+  checks: SecurityCheckItem[];
+  patchedPrompt?: string;
+  evaluatedAt: string;
+}
+
+export interface DiffToken {
+  type: 'added' | 'removed' | 'unchanged';
+  value: string;
+}

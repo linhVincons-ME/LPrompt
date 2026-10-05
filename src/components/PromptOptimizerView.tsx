@@ -14,7 +14,8 @@ import {
   FileCheck,
   AlertCircle,
   Play,
-  Share2
+  Share2,
+  GitCompare
 } from 'lucide-react';
 
 interface PromptOptimizerViewProps {
@@ -25,6 +26,7 @@ interface PromptOptimizerViewProps {
   onOpenApiKeyModal: () => void;
   onOpenPlayground: (prompt: string) => void;
   onOpenCodeExport: (prompt: string) => void;
+  onOpenVisualDiff?: (original: string, modified: string) => void;
 }
 
 export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
@@ -34,7 +36,8 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   onApplyImproved,
   onOpenApiKeyModal,
   onOpenPlayground,
-  onOpenCodeExport
+  onOpenCodeExport,
+  onOpenVisualDiff
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
   const [selectedGoal, setSelectedGoal] = useState('production_100');
@@ -329,6 +332,16 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
                     <Share2 className="w-3 h-3 text-sky-400" />
                     <span>Xuất Code</span>
                   </button>
+                  {onOpenVisualDiff && (
+                    <button
+                      onClick={() => onOpenVisualDiff(inputPrompt, optimizationResult.improved_prompt)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-300 hover:text-white text-xs font-medium transition-all"
+                      title="So sánh chi tiết thay đổi (Word-level Diff)"
+                    >
+                      <GitCompare className="w-3 h-3 text-purple-400" />
+                      <span>So sánh Diff</span>
+                    </button>
+                  )}
                 </div>
 
                 <button
