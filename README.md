@@ -1,8 +1,9 @@
 # 🚀 LPrompt Studio - Universal Prompt Engineering & PromptOps IDE
 
-> **LPrompt Studio** là nền tảng máy bàn và web chuyên dụng cho kỹ sư Prompt và lập trình viên. Ứng dụng tích hợp bộ máy thẩm định điểm số chuẩn 100 điểm đa ngôn ngữ (Việt - Anh), phân tích thiếu sót và **phân hệ chuyên biệt đưa sang Google Gemini Pro để chỉnh sửa, tái cấu trúc toàn diện prompt lên chuẩn Production-Ready (95 - 100 điểm)**.
+> **LPrompt Studio** là nền tảng máy bàn và web chuyên dụng cho kỹ sư Prompt và lập trình viên. Ứng dụng tích hợp bộ máy thẩm định điểm số chuẩn 100 điểm đa ngôn ngữ (Việt - Anh), phân tích thiếu sót, **phân hệ chuyên biệt đưa sang Google Gemini Pro để tối ưu hóa toàn diện prompt lên chuẩn Production-Ready (95 - 100 điểm)**, cùng bộ công cụ **Live Playground, Biến Động Template và Xuất Mã Nguồn SDK (v1.1)**.
 
 ![LPrompt Studio Banner](https://img.shields.io/badge/Status-Production--Ready-emerald?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.1_Live_Playground-indigo?style=for-the-badge)
 ![Gemini AI](https://img.shields.io/badge/AI_Engine-Google_Gemini_Pro_%2F_Flash-4285F4?style=for-the-badge&logo=google)
 ![React 19](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss)
@@ -10,9 +11,34 @@
 
 ---
 
-## 🌟 Tính Năng Cốt Lõi Mới Nhất
+## 🌟 Tính Năng Mới Trong Phiên Bản v1.1
 
-### 1. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
+### 1. Live Execution Playground (Chạy Thử Nghiệm Prompt Thực Tế)
+* **Thực thi 1-Click Trực Tiếp:** Gửi prompt đã tối ưu hoặc prompt ban đầu vào Gemini API để nhận phản hồi thực tế ngay trong ứng dụng.
+* **Đo lường Chỉ Số Công Nghiệp:**
+  * ⚡ **Độ trễ phản hồi (Latency):** Tính chính xác bằng mili-giây (ms).
+  * 🔢 **Thống kê Token:** Bóc tách rõ ràng Input Tokens, Output Tokens và Total Tokens.
+  * 💵 **Ước tính Chi Phí:** Tính toán tức thì chi phí theo USD ($) trên từng lượt gọi.
+* **Hỗ trợ Offline Simulation:** Nếu chưa có API Key, hệ thống tự kích hoạt chế độ mô phỏng thông minh để trải nghiệm giao diện hoàn toàn miễn phí.
+
+### 2. Bộ Xử Lý Biến Động & Template Engine (`{{variable}}`)
+* **Tự Động Phát Hiện Biến:** Tự động quét cú pháp `{{ten_bien}}` trong prompt và sinh form nhập liệu trực quan.
+* **Nút Chèn Biến Nhanh:** Cho phép tạo và chèn biến động vào bất kỳ vị trí nào trong prompt chỉ với 1 click.
+* **Nội Suy Giá Trị Thời Gian Thực:** Tự động thay thế giá trị biến vào prompt trước khi thực thi hoặc xuất mã nguồn.
+
+### 3. Xuất Mã Nguồn SDK 1-Click (Code Exporter)
+* Chuyển đổi prompt chuẩn 95-100 điểm thành mã nguồn hoàn chỉnh sẵn sàng chạy cho các dự án:
+  * 🐍 **Python:** Sử dụng SDK mới nhất của Google (`google-genai`).
+  * 🔷 **TypeScript / Node.js:** Sử dụng thư viện chuẩn `@google/genai`.
+  * 💻 **cURL:** Lệnh gọi HTTP REST API trực tiếp cho terminal và Postman.
+  * 📄 **JSON Spec:** Chuẩn cấu trúc PromptOps lưu trữ và tích hợp CI/CD.
+* **Tùy chọn linh hoạt:** Cho phép xuất code giữ nguyên cú pháp mẫu `{{var}}` hoặc điền sẵn giá trị thực tế.
+
+---
+
+## 💎 Các Tính Năng Cốt Lõi Khác
+
+### 4. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
 * **Gửi Sang Gemini Pro Để Chỉnh Sửa:** Đưa prompt thô ban đầu sang Gemini Pro để phân tích ngữ nghĩa sâu và tái cấu trúc thành prompt chuẩn công nghiệp.
 * **Bộ Chọn Mục Tiêu Tối Ưu (Optimization Goals):**
   * 🚀 *Chuẩn Production (95–100đ):* Tự động bổ sung đầy đủ 5 trụ cột kỹ thuật.
@@ -28,7 +54,7 @@
 
 ---
 
-### 2. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ (Bilingual Scoring Rubric)
+### 5. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ (Bilingual Scoring Rubric)
 Bộ thẩm định hỗ trợ toàn diện **Tiếng Việt, Tiếng Anh và Thẻ tiền tố Kỹ thuật (`[ROLE]`, `[TASK]`, `[CONSTRAINTS]`, `[OUTPUT FORMAT]`, `[PARAMETERS]`)**:
 
 ```
@@ -55,7 +81,7 @@ Bộ thẩm định hỗ trợ toàn diện **Tiếng Việt, Tiếng Anh và Th
 
 ---
 
-### 3. Hỗ Trợ 5 Phân Hệ Đa Phương Thức (Multimodal Prompting)
+### 6. Hỗ Trợ 5 Phân Hệ Đa Phương Thức (Multimodal Prompting)
 - 🧠 **Nghiên Cứu & LLM:** Lập luận chuyên sâu, khung phân tích SWOT/Rủi ro, Mermaid diagrams.
 - 🎨 **Tạo Ảnh (Flux / Midjourney / SD):** Bảng chọn tỷ lệ ảnh (`16:9`, `1:1`, `9:16`, `21:9`), Lens tiêu cự, Ánh sáng Cinematic, nút chèn khung Negative Prompt 1-Click.
 - 🎬 **Tạo Video (Sora / Kling / Runway Gen-3 / Luma):** Chuyển động camera (Dolly, Pan, Tilt, FPV), Motion speed slider, 60fps 4K specs.
@@ -64,7 +90,7 @@ Bộ thẩm định hỗ trợ toàn diện **Tiếng Việt, Tiếng Anh và Th
 
 ---
 
-### 4. Khởi Chạy 1-Click Tiện Lợi (Windows Desktop & Batch)
+### 7. Khởi Chạy 1-Click Tiện Lợi (Windows Desktop & Batch)
 * **Khởi chạy từ Desktop:** Nhấp đúp chuột vào biểu tượng **`LPrompt Studio`** trên màn hình chính Desktop.
 * **Khởi chạy từ thư mục:** Chạy file [`Run_LPrompt.bat`](file:///d:/DevV2/LPrompt/Run_LPrompt.bat).
 * 👉 Script tự động kiểm tra thư viện `npm install`, khởi động dev server và **tự động mở trình duyệt** tại `http://localhost:5173`.

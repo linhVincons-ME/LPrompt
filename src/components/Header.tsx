@@ -10,7 +10,9 @@ import {
   Code2,
   Music2,
   Gauge,
-  Wand2
+  Wand2,
+  Play,
+  Share2
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -20,6 +22,8 @@ interface HeaderProps {
   onSelectView: (view: 'evaluator' | 'optimizer') => void;
   onOpenApiKeyModal: () => void;
   onOpenLibraryModal: () => void;
+  onOpenPlayground: () => void;
+  onOpenCodeExport: () => void;
   savedCount: number;
 }
 
@@ -30,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   onOpenApiKeyModal,
   onOpenLibraryModal,
+  onOpenPlayground,
+  onOpenCodeExport,
   savedCount
 }) => {
   const domains: { id: PromptDomain; label: string; icon: React.ReactNode }[] = [
@@ -54,10 +60,10 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white tracking-tight m-0 p-0 font-sans">LPrompt Studio</h1>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                PROMPTOPS v1.0
+                PROMPTOPS v1.1
               </span>
             </div>
-            <p className="text-xs text-slate-400 m-0 p-0">Bộ công cụ đánh giá & tối ưu hóa Prompt chuẩn 100 điểm với Gemini</p>
+            <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, thẩm định & tối ưu hóa Prompt chuẩn 100 điểm với Gemini</p>
           </div>
         </div>
 
@@ -89,13 +95,33 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Live Playground Button */}
+          <button
+            onClick={onOpenPlayground}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold text-emerald-300 transition-colors shadow-sm"
+            title="Chạy thử nghiệm prompt ngay"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span className="hidden sm:inline">Playground</span>
+          </button>
+
+          {/* Export Code Button */}
+          <button
+            onClick={onOpenCodeExport}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
+            title="Xuất mã nguồn Python, TypeScript, cURL"
+          >
+            <Share2 className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden md:inline">Xuất Code</span>
+          </button>
+
           {/* Library Button */}
           <button
             onClick={onOpenLibraryModal}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
           >
             <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Kho Prompt</span>
+            <span>Kho</span>
             {savedCount > 0 && (
               <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-indigo-600 text-[10px] font-bold text-white">
                 {savedCount}
@@ -109,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
           >
             <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden md:inline">Cài đặt API Key</span>
+            <span className="hidden lg:inline">API Key</span>
           </button>
 
           {/* GitHub Repo */}

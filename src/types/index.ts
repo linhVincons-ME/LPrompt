@@ -41,3 +41,19 @@ export interface GeminiConfig {
   model: 'gemini-2.0-flash' | 'gemini-1.5-flash' | 'gemini-1.5-pro';
   temperature: number;
 }
+
+export interface PromptExecutionResult {
+  output: string;
+  latencyMs: number;
+  tokens: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  estimatedCostUsd: number;
+  modelUsed: string;
+  executedAt: string;
+  source: 'api' | 'simulation';
+}
+
+export type ExportLanguage = 'python' | 'typescript' | 'curl' | 'json';

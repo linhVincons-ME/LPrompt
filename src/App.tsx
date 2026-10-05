@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { PromptDomain, PromptEvaluation, GeminiConfig, SavedPrompt } from './types';
 import { evaluatePromptLocally, evaluatePromptWithGemini } from './services/evaluator';
 import { SAMPLE_PROMPTS } from './data/samplePrompts';
+import { extractVariables, interpolateTemplate, getInitialVariableValues } from './utils/template';
 import { Header } from './components/Header';
 import { ScoreGauge } from './components/ScoreGauge';
 import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
@@ -9,6 +10,9 @@ import { DomainToolbar } from './components/DomainToolbar';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { SavedLibraryModal } from './components/SavedLibraryModal';
 import { PromptOptimizerView } from './components/PromptOptimizerView';
+import { VariableInputsPanel } from './components/VariableInputsPanel';
+import { LivePlaygroundModal } from './components/LivePlaygroundModal';
+import { CodeExportModal } from './components/CodeExportModal';
 import {
   Sparkles,
   Zap,
@@ -20,7 +24,9 @@ import {
   SlidersHorizontal,
   Info,
   FileCheck,
-  Wand2
+  Wand2,
+  Play,
+  Share2
 } from 'lucide-react';
 
 const DEFAULT_CONFIG: GeminiConfig = {
@@ -31,7 +37,7 @@ const DEFAULT_CONFIG: GeminiConfig = {
 
 export function App() {
   const [currentDomain, setCurrentDomain] = useState<PromptDomain>('research');
-  const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer'); // Default to Optimizer as requested!
+  const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer');
   const [rawPrompt, setRawPrompt] = useState<string>('');
   const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(null);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
@@ -39,9 +45,17 @@ export function App() {
   const [copiedImproved, setCopiedImproved] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
 
+  // Dynamic Variables state (v1.1)
+  const [variables, setVariables] = useState<string[]>([]);
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+
   // Modals
   const [isApiKeyOpen, setIsApiKeyOpen] = useState<boolean>(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
+  const [isPlaygroundOpen, setIsPlaygroundOpen] = useState<boolean>(false);
+  const [playgroundPrompt, setPlaygroundPrompt] = useState<string>('');
+  const [isCodeExportOpen, setIsCodeExportOpen] = useState<boolean>(false);
+  const [codeExportPrompt, setCodeExportPrompt] = useState<string>('');
 
   // Config & Storage
   const [config, setConfig] = useState<GeminiConfig>(() => {
@@ -53,6 +67,13 @@ export function App() {
     const saved = localStorage.getItem('lprompt_saved_prompts');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Sync variables whenever rawPrompt changes
+  useEffect(() => {
+    const detected = extractVariables(rawPrompt);
+    setVariables(detected);
+    setVariableValues((prev) => getInitialVariableValues(detected, prev));
+  }, [rawPrompt]);
 
   // Load initial sample when domain changes if prompt is empty
   useEffect(() => {
@@ -70,10 +91,11 @@ export function App() {
     localStorage.setItem('lprompt_gemini_config', JSON.stringify(newConfig));
   };
 
-  // Instant local evaluation
+  // Instant local evaluation (evaluates interpolated if variables exist)
   const handleLocalEvaluate = (textToEval = rawPrompt) => {
     setAuditError(null);
-    const result = evaluatePromptLocally(textToEval, currentDomain);
+    const resolved = interpolateTemplate(textToEval, variableValues);
+    const result = evaluatePromptLocally(resolved || textToEval, currentDomain);
     setEvaluation(result);
   };
 
@@ -92,8 +114,9 @@ export function App() {
     setIsAuditing(true);
     setAuditError(null);
 
+    const resolved = interpolateTemplate(rawPrompt, variableValues);
     try {
-      const result = await evaluatePromptWithGemini(rawPrompt, currentDomain, config);
+      const result = await evaluatePromptWithGemini(resolved || rawPrompt, currentDomain, config);
       setEvaluation(result);
     } catch (err: any) {
       setAuditError(err.message || 'Lỗi kết nối Gemini API. Hãy kiểm tra lại API Key hoặc hạn mức.');
@@ -101,6 +124,21 @@ export function App() {
     } finally {
       setIsAuditing(false);
     }
+  };
+
+  // Trigger Playground
+  const handleOpenPlaygroundWith = (promptText?: string) => {
+    const target = promptText || evaluation?.improved_prompt || rawPrompt;
+    const resolved = interpolateTemplate(target, variableValues);
+    setPlaygroundPrompt(resolved || target);
+    setIsPlaygroundOpen(true);
+  };
+
+  // Trigger Code Export
+  const handleOpenCodeExportWith = (promptText?: string) => {
+    const target = promptText || evaluation?.improved_prompt || rawPrompt;
+    setCodeExportPrompt(target);
+    setIsCodeExportOpen(true);
   };
 
   // Copy helper
@@ -152,6 +190,8 @@ export function App() {
         onSelectView={setActiveView}
         onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
         onOpenLibraryModal={() => setIsLibraryOpen(true)}
+        onOpenPlayground={() => handleOpenPlaygroundWith()}
+        onOpenCodeExport={() => handleOpenCodeExportWith()}
         savedCount={savedPrompts.length}
       />
 
@@ -169,6 +209,8 @@ export function App() {
               setActiveView('evaluator');
             }}
             onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
+            onOpenPlayground={(p) => handleOpenPlaygroundWith(p)}
+            onOpenCodeExport={(p) => handleOpenCodeExportWith(p)}
           />
         ) : (
           /* VIEW 2: EVALUATOR & SCORING WORKSPACE */
@@ -256,8 +298,30 @@ export function App() {
                     setRawPrompt(e.target.value);
                     handleLocalEvaluate(e.target.value);
                   }}
-                  placeholder={`Nhập prompt cho ${currentDomain.toUpperCase()} tại đây... (Ví dụ: "Viết đoạn code crawler giá vàng...", "Chân dung thiếu nữ cyberpunk 8k...")`}
-                  className="w-full flex-1 min-h-[200px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 transition-colors resize-y"
+                  placeholder={`Nhập prompt cho ${currentDomain.toUpperCase()} tại đây... Bạn có thể dùng cú pháp {{ten_bien}} để tạo biến động.`}
+                  className="w-full flex-1 min-h-[190px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 transition-colors resize-y"
+                />
+
+                {/* Dynamic Variables Panel (v1.1) */}
+                <VariableInputsPanel
+                  variables={variables}
+                  values={variableValues}
+                  onChangeValue={(name, val) => {
+                    const updated = { ...variableValues, [name]: val };
+                    setVariableValues(updated);
+                    handleLocalEvaluate(rawPrompt);
+                  }}
+                  onAddVariable={(name) => {
+                    const tag = ` {{${name}}}`;
+                    const next = rawPrompt + tag;
+                    setRawPrompt(next);
+                  }}
+                  onClearValues={() => {
+                    const cleared: Record<string, string> = {};
+                    variables.forEach((v) => (cleared[v] = ''));
+                    setVariableValues(cleared);
+                    handleLocalEvaluate(rawPrompt);
+                  }}
                 />
 
                 {/* Error banner if any */}
@@ -275,35 +339,49 @@ export function App() {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleLocalEvaluate()}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
-                  >
-                    <Zap className="w-4 h-4 text-amber-400" />
-                    <span>Chấm Điểm Cục Bộ (0đ)</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleLocalEvaluate()}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                    >
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      <span>Chấm Điểm Cục Bộ</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('optimizer')}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/30"
-                  >
-                    <Wand2 className="w-4 h-4 text-pink-200" />
-                    <span>Đưa Sang Gemini Pro Tối Ưu</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPlaygroundWith(rawPrompt)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold transition-colors"
+                      title="Chạy thử nghiệm bản gốc"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Chạy Thử</span>
+                    </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleGeminiAudit}
-                    disabled={isAuditing}
-                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30 disabled:opacity-50"
-                  >
-                    <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
-                    <span>
-                      {isAuditing ? 'Đang chấm điểm...' : `Chấm Điểm Với ${config.model}`}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveView('optimizer')}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/30"
+                    >
+                      <Wand2 className="w-4 h-4 text-pink-200" />
+                      <span>Tối Ưu Gemini Pro</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleGeminiAudit}
+                      disabled={isAuditing}
+                      className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30 disabled:opacity-50"
+                    >
+                      <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
+                      <span>
+                        {isAuditing ? 'Đang chấm...' : 'Chấm Gemini'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -318,7 +396,25 @@ export function App() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleOpenPlaygroundWith(evaluation.improved_prompt)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-xs font-bold transition-colors"
+                        title="Chạy thử nghiệm bản nâng cấp trong Playground"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Chạy Thử</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenCodeExportWith(evaluation.improved_prompt)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+                        title="Xuất mã nguồn SDK"
+                      >
+                        <Share2 className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Xuất Code</span>
+                      </button>
+
                       <button
                         onClick={() => {
                           setRawPrompt(evaluation.improved_prompt);
@@ -333,7 +429,7 @@ export function App() {
 
                       <button
                         onClick={handleSavePrompt}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-medium transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-medium transition-colors"
                       >
                         <BookmarkPlus className="w-3.5 h-3.5" />
                         <span>Lưu</span>
@@ -344,7 +440,7 @@ export function App() {
                         className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-md shadow-emerald-600/20"
                       >
                         {copiedImproved ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedImproved ? 'Đã chép!' : '1-Click Copy'}</span>
+                        <span>{copiedImproved ? 'Đã chép!' : 'Copy'}</span>
                       </button>
                     </div>
                   </div>
@@ -419,6 +515,23 @@ export function App() {
           setSavedPrompts(filtered);
           localStorage.setItem('lprompt_saved_prompts', JSON.stringify(filtered));
         }}
+      />
+
+      {/* v1.1 Modals: Playground & Code Export */}
+      <LivePlaygroundModal
+        isOpen={isPlaygroundOpen}
+        onClose={() => setIsPlaygroundOpen(false)}
+        prompt={playgroundPrompt}
+        config={config}
+      />
+
+      <CodeExportModal
+        isOpen={isCodeExportOpen}
+        onClose={() => setIsCodeExportOpen(false)}
+        rawPrompt={codeExportPrompt}
+        interpolatedPrompt={interpolateTemplate(codeExportPrompt, variableValues)}
+        hasVariables={variables.length > 0}
+        config={config}
       />
     </div>
   );

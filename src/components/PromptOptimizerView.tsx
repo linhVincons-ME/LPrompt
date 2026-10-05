@@ -12,7 +12,9 @@ import {
   Send,
   Loader2,
   FileCheck,
-  AlertCircle
+  AlertCircle,
+  Play,
+  Share2
 } from 'lucide-react';
 
 interface PromptOptimizerViewProps {
@@ -21,6 +23,8 @@ interface PromptOptimizerViewProps {
   config: GeminiConfig;
   onApplyImproved: (newPrompt: string) => void;
   onOpenApiKeyModal: () => void;
+  onOpenPlayground: (prompt: string) => void;
+  onOpenCodeExport: (prompt: string) => void;
 }
 
 export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
@@ -28,7 +32,9 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   domain,
   config,
   onApplyImproved,
-  onOpenApiKeyModal
+  onOpenApiKeyModal,
+  onOpenPlayground,
+  onOpenCodeExport
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
   const [selectedGoal, setSelectedGoal] = useState('production_100');
@@ -102,7 +108,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-white tracking-tight m-0">Gemini Pro Prompt Optimizer</h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                PRO ENGINE
+                PRO ENGINE v1.1
               </span>
             </div>
             <p className="text-xs text-slate-300 m-0">
@@ -235,14 +241,26 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
             className="w-full flex-1 min-h-[260px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
           />
 
-          <div className="flex items-center justify-between pt-2">
-            <button
-              onClick={() => setInputPrompt('')}
-              className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Xóa trắng</span>
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setInputPrompt('')}
+                className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Xóa</span>
+              </button>
+              {inputPrompt.trim() && (
+                <button
+                  onClick={() => onOpenPlayground(inputPrompt)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium border border-emerald-500/20 transition-colors"
+                  title="Chạy thử bản gốc"
+                >
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Chạy thử</span>
+                </button>
+              )}
+            </div>
 
             <button
               onClick={() => handleOptimize()}
@@ -288,20 +306,37 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
-                <button
-                  onClick={() => onApplyImproved(optimizationResult.improved_prompt)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold transition-all"
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  <span>Áp dụng vào Workspace</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onApplyImproved(optimizationResult.improved_prompt)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold transition-all"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Dùng bản này</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenPlayground(optimizationResult.improved_prompt)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-semibold border border-emerald-500/30 transition-all"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Chạy thử ngay</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenCodeExport(optimizationResult.improved_prompt)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all"
+                    title="Xuất mã nguồn"
+                  >
+                    <Share2 className="w-3 h-3 text-sky-400" />
+                    <span>Xuất Code</span>
+                  </button>
+                </div>
 
                 <button
                   onClick={() => handleCopy(optimizationResult.improved_prompt)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20"
                 >
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Đã sao chép!' : '1-Click Copy Prompt'}</span>
+                  <span>{copied ? 'Đã sao chép!' : '1-Click Copy'}</span>
                 </button>
               </div>
             </>
