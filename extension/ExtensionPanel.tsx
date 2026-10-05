@@ -10,6 +10,7 @@ import {
   type PromptFramework
 } from '../src/services/frameworkCompiler';
 import { recordTransientFailure, type AvailabilityState, type TransientFailure } from './availability';
+import { inspectPromptLocally } from '../src/services/promptInspector';
 
 interface StoredDraft {
   source: string;
@@ -98,6 +99,7 @@ export function ExtensionPanel() {
   const [copied, setCopied] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityState | null>(null);
   const [clock, setClock] = useState(() => Date.now());
+  const [lastBridgeDraftId, setLastBridgeDraftId] = useState('');
 
   useEffect(() => {
     void chrome.storage.local.get([STORAGE_KEYS.draft, STORAGE_KEYS.snapshots, STORAGE_KEYS.lastResponse, STORAGE_KEYS.availability]).then((stored) => {
@@ -115,6 +117,44 @@ export function ExtensionPanel() {
       if (savedAvailability?.retryAt && savedAvailability?.failure) setAvailability(savedAvailability);
     }).catch(() => setStatus('Không đọc được dữ liệu cục bộ; bạn vẫn có thể tiếp tục soạn prompt.'));
   }, []);
+
+  useEffect(() => {
+    const listener = (message: unknown) => {
+      const payload = message as { type?: string; source?: string };
+      if (payload.type !== 'LPROMPT_DRAFT_UPDATED' || !payload.source) return;
+      setSource(payload.source);
+      setCompiled(null);
+      setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      const controller = new AbortController();
+      const timeout = globalThis.setTimeout(() => controller.abort(), 2500);
+      try {
+        const response = await fetch('http://127.0.0.1:8484/api/extension/draft', { signal: controller.signal, cache: 'no-store' });
+        if (!active || response.status === 204 || !response.ok) return;
+        const payload = await response.json() as { data?: { id?: string; source?: string } };
+        if (!payload.data?.id || !payload.data.source || payload.data.id === lastBridgeDraftId) return;
+        setLastBridgeDraftId(payload.data.id);
+        setSource(payload.data.source);
+        setCompiled(null);
+        setStatus('Đã nhận prompt từ web app cục bộ.');
+        await chrome.storage.local.set({ [STORAGE_KEYS.draft]: { source: payload.data.source, framework, domain, additionalInstruction, outputLanguage } });
+      } catch {
+        // Service là tùy chọn; khi offline extension vẫn hoạt động độc lập.
+      } finally {
+        globalThis.clearTimeout(timeout);
+      }
+    };
+    void poll();
+    const interval = globalThis.setInterval(() => void poll(), 4000);
+    return () => { active = false; globalThis.clearInterval(interval); };
+  }, [lastBridgeDraftId, framework, domain, additionalInstruction, outputLanguage]);
 
   useEffect(() => {
     if (!availability) return;
@@ -158,6 +198,7 @@ export function ExtensionPanel() {
     () => evaluatePromptLocally(visiblePrompt || source, domain),
     [visiblePrompt, source, domain]
   );
+  const promptIssues = useMemo(() => inspectPromptLocally(visiblePrompt || source), [visiblePrompt, source]);
 
   const saveDraft = (patch: Partial<StoredDraft>) => {
     const draft = { source, framework, domain, additionalInstruction, outputLanguage, ...patch };
@@ -341,6 +382,7 @@ export function ExtensionPanel() {
             </div>
           </div>
           <p className="text-[11px] text-slate-400">{compiled.reason}</p>
+          {promptIssues.length > 0 && <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] text-amber-100"><strong>{promptIssues.length} điểm cần xem lại:</strong> {promptIssues.map((issue) => issue.title).join('; ')}.</div>}
           <textarea readOnly value={compiled.prompt} className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200" />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => void copyPrompt()} className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs hover:bg-slate-800">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Đã chép' : 'Sao chép'}</button>

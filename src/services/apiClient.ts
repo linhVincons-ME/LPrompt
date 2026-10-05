@@ -157,3 +157,17 @@ export async function deleteServerVersion(id: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function sendDraftToExtension(source: string): Promise<boolean> {
+  if (!source.trim()) return false;
+  try {
+    const res = await apiFetch('/api/extension/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source })
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

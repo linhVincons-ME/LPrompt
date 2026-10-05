@@ -35,6 +35,19 @@ describe('local service and MCP integration', () => {
     expect(page).toContain('<div id="root"></div>');
   });
 
+  it('bridges an ephemeral draft to extension origins only', async () => {
+    const base = `http://127.0.0.1:${service.port}`;
+    const saved = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ source: 'Prompt chuyển sang extension' }) });
+    expect(saved.status).toBe(202);
+    const extensionOrigin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+    const received = await fetch(`${base}/api/extension/draft`, { headers: { Origin: extensionOrigin } });
+    expect(received.status).toBe(200);
+    expect(received.headers.get('access-control-allow-origin')).toBe(extensionOrigin);
+    expect((await received.json()).data.source).toBe('Prompt chuyển sang extension');
+    const blockedWrite = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: extensionOrigin }, body: JSON.stringify({ source: 'blocked' }) });
+    expect(blockedWrite.status).toBe(403);
+  });
+
   it('refuses remote binding without explicit auth and allowlists', () => {
     expect(() => createApp({ host: '0.0.0.0' })).toThrow('Remote bind yêu cầu');
   });

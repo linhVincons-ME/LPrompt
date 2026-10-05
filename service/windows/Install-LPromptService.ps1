@@ -13,39 +13,39 @@ param(
 Assert-LPromptWindows
 Assert-LPromptAdministrator
 
-if (Get-LPromptService) { throw 'Service LPrompt đã tồn tại. Hãy uninstall trước khi cài lại.' }
-if ($DelayedAutoStart -and $StartMode -ne 'Automatic') { throw 'DelayedAutoStart chỉ hợp lệ khi StartMode là Automatic.' }
+if (Get-LPromptService) { throw 'The LPrompt service already exists. Uninstall it before reinstalling.' }
+if ($DelayedAutoStart -and $StartMode -ne 'Automatic') { throw 'DelayedAutoStart is valid only when StartMode is Automatic.' }
 
 if (-not $NodeExe) {
   $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
-  if (-not $nodeCommand) { throw 'Không tìm thấy node.exe. Hãy cài Node.js 24+ hoặc truyền -NodeExe.' }
+  if (-not $nodeCommand) { throw 'node.exe was not found. Install Node.js 24+ or pass -NodeExe.' }
   $NodeExe = $nodeCommand.Source
 }
 $NodeExe = [IO.Path]::GetFullPath($NodeExe)
-if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) { throw "Không tìm thấy Node executable: $NodeExe" }
+if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) { throw "Node executable was not found: $NodeExe" }
 $nodeVersionText = & $NodeExe --version
-if ($LASTEXITCODE -ne 0) { throw 'Không đọc được phiên bản Node.js.' }
-if ($nodeVersionText -notmatch '^v(?<major>\d+)\.') { throw 'Định dạng phiên bản Node.js không hợp lệ.' }
-if ([int]$Matches.major -lt 24) { throw "LPrompt yêu cầu Node.js 24+, hiện tại là $nodeVersionText." }
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the Node.js version.' }
+if ($nodeVersionText -notmatch '^v(?<major>\d+)\.') { throw 'The Node.js version format is invalid.' }
+if ([int]$Matches.major -lt 24) { throw "LPrompt requires Node.js 24+; current version is $nodeVersionText." }
 
 Push-Location $script:LPromptRoot
 try {
   if (-not $SkipBuild) {
     $npmCommand = Join-Path (Split-Path -Parent $NodeExe) 'npm.cmd'
-    if (-not (Test-Path -LiteralPath $npmCommand -PathType Leaf)) { throw "Không tìm thấy npm.cmd cạnh Node.js: $npmCommand" }
+    if (-not (Test-Path -LiteralPath $npmCommand -PathType Leaf)) { throw "npm.cmd was not found next to Node.js: $npmCommand" }
     if (-not (Test-Path -LiteralPath (Join-Path $script:LPromptRoot 'node_modules'))) {
       & $npmCommand ci
-      if ($LASTEXITCODE -ne 0) { throw 'npm ci thất bại.' }
+      if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
     }
     & $npmCommand run build
-    if ($LASTEXITCODE -ne 0) { throw 'Production build thất bại; service chưa được cài.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Production build failed; the service was not installed.' }
   }
 } finally {
   Pop-Location
 }
 
 $distIndex = Join-Path $script:LPromptRoot 'dist\index.html'
-if (-not (Test-Path -LiteralPath $distIndex -PathType Leaf)) { throw 'Thiếu dist\index.html. Hãy build ứng dụng trước khi cài service.' }
+if (-not (Test-Path -LiteralPath $distIndex -PathType Leaf)) { throw 'Missing dist\index.html. Build the application before installing the service.' }
 
 $dataDir = Join-Path $script:LPromptRoot 'data'
 $logDir = Join-Path $script:LPromptRuntime 'logs'
@@ -58,14 +58,14 @@ $downloadPath = Join-Path $script:LPromptRuntime 'LPromptService.download'
 try {
   if ($WinSwSource) {
     $WinSwSource = [IO.Path]::GetFullPath($WinSwSource)
-    if (-not (Test-Path -LiteralPath $WinSwSource -PathType Leaf)) { throw "Không tìm thấy WinSW source: $WinSwSource" }
+    if (-not (Test-Path -LiteralPath $WinSwSource -PathType Leaf)) { throw "WinSW source was not found: $WinSwSource" }
     Copy-Item -Force -LiteralPath $WinSwSource -Destination $downloadPath
   } else {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -UseBasicParsing -Uri $winSwUrl -OutFile $downloadPath
   }
   $actualHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash
-  if ($actualHash -ne $winSwSha256) { throw "Sai SHA-256 WinSW. Expected $winSwSha256, nhận $actualHash." }
+  if ($actualHash -ne $winSwSha256) { throw "Invalid WinSW SHA-256. Expected $winSwSha256, received $actualHash." }
   Move-Item -Force -LiteralPath $downloadPath -Destination $script:LPromptWinSw
 } finally {
   Remove-Item -Force -LiteralPath $downloadPath -ErrorAction SilentlyContinue
@@ -77,7 +77,7 @@ $delayedTag = if ($DelayedAutoStart) { '<delayedAutoStart>true</delayedAutoStart
 $pythonTag = ''
 if ($PythonExe) {
   $PythonExe = [IO.Path]::GetFullPath($PythonExe)
-  if (-not (Test-Path -LiteralPath $PythonExe -PathType Leaf)) { throw "Không tìm thấy Python executable: $PythonExe" }
+  if (-not (Test-Path -LiteralPath $PythonExe -PathType Leaf)) { throw "Python executable was not found: $PythonExe" }
   $pythonTag = '<env name="LPROMPT_PYTHON" value="{0}" />' -f (ConvertTo-LPromptXmlText $PythonExe)
 }
 $replacements = @{
@@ -90,7 +90,7 @@ $replacements = @{
   '{{PYTHON_ENV}}' = $pythonTag
 }
 foreach ($token in $replacements.Keys) { $xml = $xml.Replace($token, $replacements[$token]) }
-if ($xml -match '\{\{[^}]+\}\}') { throw 'Service config còn token chưa được thay thế.' }
+if ($xml -match '\{\{[^}]+\}\}') { throw 'The service config still contains an unreplaced token.' }
 [xml]$validatedXml = $xml
 [IO.File]::WriteAllText($script:LPromptWinSwConfig, $validatedXml.OuterXml, [Text.UTF8Encoding]::new($false))
 
@@ -103,39 +103,39 @@ $readTargets = @(
   $script:LPromptRuntime
 )
 foreach ($readTarget in $readTargets) {
-  if (-not (Test-Path -LiteralPath $readTarget)) { throw "Thiếu runtime path: $readTarget" }
+  if (-not (Test-Path -LiteralPath $readTarget)) { throw "Missing runtime path: $readTarget" }
   $isRecursiveDirectory = (Get-Item -LiteralPath $readTarget).PSIsContainer -and $readTarget -ne $script:LPromptRoot
   $recursiveArgs = if ($isRecursiveDirectory) { @('/T', '/C', '/Q') } else { @('/C', '/Q') }
   $permission = if ($isRecursiveDirectory) { '*S-1-5-19:(OI)(CI)RX' } else { '*S-1-5-19:(RX)' }
   & icacls.exe $readTarget /grant $permission @recursiveArgs | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw "Không cấp được quyền Read/Execute cho LocalService trên: $readTarget" }
+  if ($LASTEXITCODE -ne 0) { throw "Could not grant LocalService Read/Execute permission on: $readTarget" }
 }
 & icacls.exe $dataDir /grant '*S-1-5-19:(OI)(CI)M' /T /C /Q | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Không cấp được quyền Modify cho LocalService trên data.' }
+if ($LASTEXITCODE -ne 0) { throw 'Could not grant LocalService Modify permission on data.' }
 & icacls.exe $logDir /grant '*S-1-5-19:(OI)(CI)M' /T /C /Q | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Không cấp được quyền Modify cho LocalService trên logs.' }
+if ($LASTEXITCODE -ne 0) { throw 'Could not grant LocalService Modify permission on logs.' }
 
 & $script:LPromptWinSw install
 if ($LASTEXITCODE -ne 0) {
   $installExitCode = $LASTEXITCODE
   if (Get-LPromptService) { & $script:LPromptWinSw uninstall | Out-Null }
-  throw "WinSW install thất bại với mã $installExitCode; đã thử rollback đăng ký service."
+  throw "WinSW install failed with exit code $installExitCode; service registration rollback was attempted."
 }
 
-Write-Host "Đã cài LPrompt Windows Service ($StartMode, LocalService)." -ForegroundColor Green
+Write-Host "LPrompt Windows Service was installed ($StartMode, LocalService)." -ForegroundColor Green
 if ($StartAfterInstall) {
   try {
     Start-Service -Name $script:LPromptServiceName
     Wait-LPromptServiceStatus -Status Running | Out-Null
     $health = Wait-LPromptHealth
-    Write-Host "Service ready tại $script:LPromptHealthUrl (PID $($health.pid))." -ForegroundColor Green
+    Write-Host "Service is ready at $script:LPromptHealthUrl (PID $($health.pid))." -ForegroundColor Green
   } catch {
     $installedService = Get-LPromptService
     if ($installedService -and $installedService.Status -ne 'Stopped') {
       Stop-Service -Name $script:LPromptServiceName -ErrorAction SilentlyContinue
     }
-    throw "Service đã được cài nhưng không đạt health check và đã được dừng. $($_.Exception.Message)"
+    throw "Service was installed but failed its health check and was stopped. $($_.Exception.Message)"
   }
 } else {
-  Write-Host 'Service đang tắt. Dùng Start-LPromptService.ps1 hoặc services.msc để bật.'
+  Write-Host 'Service is stopped. Use Start-LPromptService.ps1 or services.msc to start it.'
 }

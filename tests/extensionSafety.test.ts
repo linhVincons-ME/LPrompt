@@ -7,12 +7,14 @@ const manifest = JSON.parse(readFileSync(new URL('../extension/public/manifest.j
   side_panel: { default_path: string };
 };
 const contentScript = readFileSync(new URL('../extension/contentScript.ts', import.meta.url), 'utf8');
+const serviceWorker = readFileSync(new URL('../extension/serviceWorker.ts', import.meta.url), 'utf8');
 
 describe('extension safety contract', () => {
-  it('limits host access to Gemini and avoids broad tab/cookie permissions', () => {
-    expect(manifest.host_permissions).toEqual(['https://gemini.google.com/*']);
-    expect(manifest.permissions).toEqual(['sidePanel', 'storage']);
+  it('limits host access to Gemini and the loopback bridge without broad site access', () => {
+    expect(manifest.host_permissions).toEqual(['https://gemini.google.com/*', 'http://127.0.0.1:8484/*']);
+    expect(manifest.permissions).toEqual(['sidePanel', 'storage', 'contextMenus']);
     expect(manifest.permissions).not.toContain('cookies');
+    expect(manifest.host_permissions).not.toContain('<all_urls>');
   });
 
   it('does not implement automatic submit behavior', () => {
@@ -24,5 +26,11 @@ describe('extension safety contract', () => {
   it('keeps the content script self-contained for classic MV3 injection', () => {
     expect(contentScript).not.toMatch(/^import\s/m);
     expect(contentScript).toContain('classifyTransientFailure');
+  });
+
+  it('imports only explicit user selection through the context menu', () => {
+    expect(serviceWorker).toContain("contexts: ['selection']");
+    expect(serviceWorker).toContain('info.selectionText');
+    expect(manifest.permissions).not.toContain('scripting');
   });
 });

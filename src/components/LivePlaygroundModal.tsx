@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { PromptExecutionResult } from '../types';
 import { previewPromptLocally } from '../services/execution';
+import { inspectPromptLocally } from '../services/promptInspector';
+import { sendDraftToExtension } from '../services/apiClient';
 import {
   X,
   Play,
@@ -30,6 +32,8 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const issues = useMemo(() => inspectPromptLocally(prompt), [prompt]);
+  const [bridgeStatus, setBridgeStatus] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -58,6 +62,12 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleSendToExtension = async () => {
+    setBridgeStatus('Đang chuyển...');
+    const sent = await sendDraftToExtension(prompt);
+    setBridgeStatus(sent ? 'Đã chuyển; mở side panel để nhận.' : 'Service chưa sẵn sàng hoặc đã timeout.');
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
@@ -69,7 +79,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Local Prompt Preview</h3>
+                <h3 className="text-base font-bold text-white">Xem trước prompt cục bộ</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
                   OFFLINE
                 </span>
@@ -111,7 +121,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
           <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800/80">
             <Cpu className="w-4 h-4 text-purple-400" />
             <div>
-              <div className="text-[10px] text-slate-400">Tổng Tokens</div>
+              <div className="text-[10px] text-slate-400">Ước lượng token</div>
               <div className="font-mono font-bold text-white">
                 {result ? `${result.tokens.total} tok` : isRunning ? '...' : '--'}
               </div>
@@ -123,11 +133,20 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
             <div>
               <div className="text-[10px] text-slate-400">Chế độ</div>
               <div className="font-mono font-semibold text-indigo-300 truncate max-w-[120px]">
-                Local preview
+                Xem trước cục bộ
               </div>
             </div>
           </div>
         </div>
+
+        {issues.length > 0 && (
+          <div className="mx-4 mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+            <div className="font-bold text-amber-300">Phát hiện {issues.length} điểm mơ hồ hoặc xung đột</div>
+            <ul className="mt-2 space-y-2 text-slate-300">
+              {issues.map((issue) => <li key={issue.id}><strong className={issue.severity === 'error' ? 'text-rose-300' : 'text-amber-200'}>{issue.title}:</strong> {issue.description} {issue.suggestion}</li>)}
+            </ul>
+          </div>
+        )}
 
         {/* Content Body: Split Prompt & Output */}
         <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -178,13 +197,11 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
 
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
-          <span>⚡ Không gọi API. Dùng extension để chèn prompt vào Gemini Web khi cần phản hồi thực tế.</span>
-          <button
-            onClick={handleClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
-          >
-            Đóng
-          </button>
+          <span>{bridgeStatus || '⚡ Không gọi API AI. Dùng extension để làm việc với Gemini Web.'}</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => void handleSendToExtension()} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Chuyển sang extension</button>
+            <button onClick={handleClose} className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors">Đóng</button>
+          </div>
         </div>
       </div>
     </div>

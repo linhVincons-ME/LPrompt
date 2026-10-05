@@ -1,13 +1,14 @@
 # LPrompts Studio 3.0
 
-LPrompts Studio là bộ công cụ local-first để soạn, biên dịch, đánh giá, kiểm thử và quản lý phiên bản prompt. Đường dùng chính là Chrome Side Panel chạy cạnh Gemini Web.
+LPrompts Studio là bộ công cụ local-first để soạn, biên dịch, đánh giá, kiểm thử và quản lý phiên bản prompt, với nhận diện thương hiệu logo chữ **L** hồng tím neon phong cách AI PromptOps. Đường dùng chính là Chrome Side Panel chạy cạnh Gemini Web.
 
 ## Kiến trúc hiện tại
 
 - Không gọi Gemini API, không có màn hình API key, model catalog, SDK export hoặc endpoint DSPy.
-- Compiler, evaluator, few-shot, batch structural test và security scan chạy cục bộ.
-- Extension chỉ có quyền trên `https://gemini.google.com/*`, không đọc cookie và không tự bấm gửi.
+- Compiler, evaluator, few-shot, template test, phát hiện mơ hồ/xung đột và quét guardrail tĩnh chạy cục bộ.
+- Extension chỉ có quyền trên Gemini Web và cầu nối loopback `127.0.0.1:8484`; không có quyền `<all_urls>`, không đọc cookie và không tự bấm gửi.
 - Web app và Windows Service chỉ phục vụ giao diện, SQLite, REST và MCP cục bộ.
+- Dự án không tích hợp local LLM, Ollama hoặc LM Studio để tránh sử dụng thêm CPU, RAM và dung lượng model.
 - Khi nâng cấp từ bản cũ, web app xóa khóa `lprompt_gemini_config` khỏi `localStorage`.
 
 ## Chrome Extension
@@ -31,6 +32,12 @@ Luồng sử dụng:
 6. Lưu snapshot nếu cần.
 
 Draft, phản hồi và tối đa 10 snapshot được lưu bằng `chrome.storage.local`.
+
+### Context menu và cầu nối cục bộ
+
+- Trên website bất kỳ, bôi chọn văn bản rồi bấm chuột phải → **Đưa phần đã chọn vào LPrompt**. Extension chỉ nhận đúng `selectionText`; không đọc DOM toàn trang.
+- Trong **Xem trước prompt cục bộ**, nút **Chuyển sang extension** gửi draft tới service bằng bộ nhớ tạm, TTL 10 phút. Extension đọc draft qua loopback; draft trung chuyển không được ghi vào SQLite.
+- Nếu cần giới hạn chính xác extension được phép đọc bridge, đặt `LPROMPT_EXTENSION_IDS` thành danh sách extension ID, phân tách bằng dấu phẩy, rồi restart service.
 
 ### Bảo vệ khi Gemini quá tải
 
@@ -71,6 +78,7 @@ REST cục bộ:
 - `GET|POST /api/versions`
 - `DELETE /api/versions/:id`
 - `GET /api/presets`
+- `POST|GET /api/extension/draft` (bridge tạm thời web → extension)
 - `POST /api/backup`
 
 MCP Streamable HTTP: `POST http://127.0.0.1:8484/mcp`.
@@ -81,7 +89,7 @@ MCP Streamable HTTP: `POST http://127.0.0.1:8484/mcp`.
 npm run check
 ```
 
-Lệnh trên chạy lint, test, web build và extension build. Kiểm thử gồm compiler song ngữ, VIE/ENG, extension safety, nhận diện quá tải/cooldown, local export, evaluator, batch, security scan tĩnh, version graph, REST/SQLite/MCP và Windows Service.
+Lệnh trên chạy lint, test, web build và extension build. Kiểm thử gồm compiler song ngữ, VIE/ENG, extension safety, bridge, nhận diện quá tải/cooldown, local export, evaluator, template test, phát hiện mơ hồ/xung đột, quét guardrail tĩnh, version graph, REST/SQLite/MCP và Windows Service.
 
 Chrome vẫn cần smoke-test thủ công sau khi load unpacked vì cấu trúc DOM của Gemini Web có thể thay đổi theo tài khoản hoặc phiên bản giao diện.
 

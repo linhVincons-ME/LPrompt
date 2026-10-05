@@ -85,12 +85,12 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Red-Teaming & Quét Lỗ Hổng Bảo Mật</h3>
+                <h3 className="text-base font-bold text-white">Quét Tĩnh Guardrail Bảo Mật</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300">
                   OWASP LLM Top 10
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Kiểm tra rò rỉ System Prompt, Prompt Injection và nguy cơ ảo giác</p>
+              <p className="text-xs text-slate-400">Kiểm tra sự hiện diện của guardrail; không mô phỏng tấn công động</p>
             </div>
           </div>
 
@@ -131,10 +131,10 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 {report?.safetyScore && report.safetyScore >= 80
-                  ? 'Prompt có rào chắn kiên cố, khả năng phòng vệ trước jailbreak rất tốt.'
+                  ? 'Prompt có mức bao phủ guardrail tĩnh tốt; vẫn cần kiểm thử thực tế trước khi dùng.'
                   : report?.safetyScore && report.safetyScore >= 50
                   ? 'Mức độ rủi ro trung bình, thiếu điều khoản chống rò rỉ prompt hoặc rào chắn ảo giác.'
-                  : 'Cảnh báo nguy cơ cao! Prompt dễ bị chiếm quyền điều khiển bằng Prompt Injection.'}
+                  : 'Thiếu nhiều guardrail tường minh; kết quả này không phải phép thử jailbreak động.'}
               </p>
               {report && <p className="text-[11px] text-sky-300 mt-1">Chế độ: phân tích tĩnh cục bộ</p>}
             </div>
@@ -161,7 +161,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
           {isScanning ? (
             <div className="py-16 flex flex-col items-center justify-center text-slate-500 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
-              <span className="text-xs">Đang kiểm thử Red-Teaming và rà soát lỗ hổng...</span>
+              <span className="text-xs">Đang quét tĩnh mức độ bao phủ guardrail...</span>
             </div>
           ) : (
             report?.checks.map((check) => {

@@ -131,14 +131,14 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white m-0">
-                  Batch Evaluation & Test Suite Runner
+                  Kiểm Thử Template Cục Bộ
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   v2.0 PRO
                 </span>
               </div>
               <p className="text-xs text-slate-400 m-0">
-                Kiểm thử hàng loạt bộ dữ liệu đầu vào, thẩm định assertions và đo lường tỷ lệ Pass/Fail theo chuẩn Promptfoo & Langfuse
+                Điền nhiều bộ biến và kiểm tra cấu trúc bằng các quy tắc xác định; không gọi model AI
               </p>
             </div>
           </div>
@@ -334,7 +334,7 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
                       <Clock className="w-5 h-5 text-sky-400" />
                       <span>{summary.avgLatencyMs}ms</span>
                     </div>
-                    <span className="text-[10px] text-slate-500">Mỗi lượt gọi</span>
+                    <span className="text-[10px] text-slate-500">Mỗi trường hợp cục bộ</span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
@@ -365,7 +365,7 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
                         <th className="p-3">Tên Test Case</th>
                         <th className="p-3">Độ Trễ</th>
                         <th className="p-3">Lý Do Đánh Giá</th>
-                        <th className="p-3">Đầu Ra AI Thực Tế</th>
+                        <th className="p-3">Template Sau Khi Điền Biến</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800 bg-slate-900/60 font-mono">

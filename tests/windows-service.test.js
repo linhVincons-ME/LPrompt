@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const serviceDir = path.resolve('service/windows');
 const read = (name) => fs.readFileSync(path.join(serviceDir, name), 'utf8');
@@ -48,11 +49,24 @@ describe('Windows Service package', () => {
       expect(launcher).toContain('set "LPROMPT_EXIT=%errorlevel%"');
       expect(launcher).toContain('exit /b %LPROMPT_EXIT%');
     }
+    expect(launchers[0]).toContain('sc.exe query LPrompt');
+    expect(launchers[0]).toContain('Install_LPrompt_Windows_Service.bat');
     const installer = read('Install-LPromptService.ps1');
-    expect(installer).toContain('không đạt health check và đã được dừng');
-    expect(installer).toContain('đã thử rollback đăng ký service');
+    expect(installer).toContain('failed its health check and was stopped');
+    expect(installer).toContain('service registration rollback was attempted');
     const legacyLauncher = fs.readFileSync(path.resolve('Start_LPrompt_Service.vbs'), 'utf8');
     expect(legacyLauncher).not.toContain('node server/index.js');
     expect(legacyLauncher).toContain('Start-LPromptService.ps1');
+  });
+
+  it('parses every service script in Windows PowerShell without encoding errors', () => {
+    if (process.platform !== 'win32') return;
+    for (const file of fs.readdirSync(serviceDir).filter((name) => name.endsWith('.ps1'))) {
+      const fullPath = path.join(serviceDir, file).replaceAll("'", "''");
+      const command = `$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('${fullPath}', [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }`;
+      const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], { encoding: 'utf8', timeout: 10_000 });
+      expect(result.error).toBeUndefined();
+      expect(result.status, `${file}: ${result.stderr}`).toBe(0);
+    }
   });
 });

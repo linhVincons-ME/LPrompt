@@ -14,6 +14,6 @@ try {
   $health = Invoke-RestMethod -Uri $script:LPromptHealthUrl -TimeoutSec 2
   Write-Host "Health: $($health.status); lifecycle: $($health.lifecycle); PID: $($health.pid); uptime: $($health.uptimeSeconds)s" -ForegroundColor Green
 } catch {
-  Write-Host 'Health endpoint không phản hồi.' -ForegroundColor Yellow
+  Write-Host 'Health endpoint did not respond.' -ForegroundColor Yellow
   if ($service.Status -eq 'Running') { exit 1 }
 }

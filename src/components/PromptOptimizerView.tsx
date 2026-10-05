@@ -367,10 +367,10 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
                     <button
                       onClick={() => onOpenBatchEval(optimizationResult.improved_prompt)}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 text-xs font-medium transition-all"
-                      title="Chạy Batch Test Suite cho bản này"
+                      title="Kiểm thử template cục bộ cho bản này"
                     >
                       <Layers className="w-3 h-3 text-indigo-400" />
-                      <span>Batch Test</span>
+                      <span>Template Test</span>
                     </button>
                   )}
                 </div>

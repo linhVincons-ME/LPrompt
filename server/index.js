@@ -22,6 +22,8 @@ const versionSchema = z.object({
   createdAt: z.string().datetime().optional(), branchName: z.string().min(1).max(100).optional(), parentId: z.string().max(200).optional(),
   mergeParentId: z.string().max(200).optional(), contentHash: z.string().max(128).optional(), promptId: z.string().max(200).optional()
 });
+const extensionDraftSchema = z.object({ source: z.string().min(1).max(200_000) });
+const EXTENSION_DRAFT_TTL_MS = 10 * 60 * 1000;
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -33,6 +35,8 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
   const remoteToken = process.env.LPROMPT_AUTH_TOKEN || '';
   const allowedHosts = (process.env.LPROMPT_ALLOWED_HOSTS || '').split(',').map((value) => value.trim()).filter(Boolean);
   const allowedOrigins = new Set((process.env.LPROMPT_ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean));
+  const allowedExtensionIds = new Set((process.env.LPROMPT_EXTENSION_IDS || '').split(',').map((value) => value.trim()).filter(Boolean));
+  let extensionDraft = null;
   if (!isLoopback && (remoteToken.length < 24 || allowedHosts.length === 0 || allowedOrigins.size === 0)) {
     throw new Error('Remote bind yêu cầu LPROMPT_AUTH_TOKEN (>=24 ký tự), LPROMPT_ALLOWED_HOSTS và LPROMPT_ALLOWED_ORIGINS.');
   }
@@ -51,7 +55,12 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     const origin = req.headers.origin;
-    const originAllowed = !origin || (isLoopback ? /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin) : allowedOrigins.has(origin));
+    const extensionMatch = typeof origin === 'string' ? /^chrome-extension:\/\/([a-p]{32})$/i.exec(origin) : null;
+    const extensionBridgeRead = req.method === 'GET' && req.path === '/api/extension/draft' && extensionMatch
+      && (allowedExtensionIds.size === 0 || allowedExtensionIds.has(extensionMatch[1]));
+    const originAllowed = !origin || (isLoopback
+      ? /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin) || Boolean(extensionBridgeRead)
+      : allowedOrigins.has(origin));
     if (!originAllowed) return next(httpError(403, 'Origin không được phép.'));
     if (!isLoopback && req.headers.authorization !== `Bearer ${remoteToken}`) return next(httpError(401, 'Thiếu hoặc sai Bearer token.'));
     if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
@@ -62,6 +71,20 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
   });
 
   app.get('/health', (req, res) => res.json({ status: serviceState.lifecycle === 'ready' ? 'ok' : serviceState.lifecycle, lifecycle: serviceState.lifecycle, service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
+  app.post('/api/extension/draft', (req, res) => {
+    const { source } = extensionDraftSchema.parse(req.body);
+    const now = Date.now();
+    extensionDraft = { id: crypto.randomUUID(), source, createdAt: new Date(now).toISOString(), expiresAt: now + EXTENSION_DRAFT_TTL_MS };
+    res.status(202).json({ success: true, id: extensionDraft.id, expiresAt: extensionDraft.expiresAt });
+  });
+  app.get('/api/extension/draft', (_req, res) => {
+    if (!extensionDraft || extensionDraft.expiresAt <= Date.now()) {
+      extensionDraft = null;
+      return res.status(204).end();
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ success: true, data: extensionDraft });
+  });
   app.get('/api/prompts', (_req, res) => res.json({ success: true, data: getAllPrompts() }));
   app.post('/api/prompts', (req, res) => res.status(201).json({ success: true, data: savePrompt(promptSchema.parse(req.body)) }));
   app.delete('/api/prompts/:id', (req, res) => res.json(deletePrompt(req.params.id)));

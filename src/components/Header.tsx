@@ -113,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenSecurityScan}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs font-bold text-rose-300 transition-colors shadow-sm"
-            title="Quét bảo mật Red-Teaming & Chống Prompt Injection"
+            title="Quét tĩnh mức độ bao phủ guardrail OWASP LLM"
           >
             <Shield className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Bảo Mật</span>
@@ -136,10 +136,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenBatchEval}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-bold text-indigo-300 transition-colors shadow-sm"
-              title="Chạy kiểm thử hàng loạt Test Suite Matrix"
+              title="Kiểm thử template cục bộ với nhiều bộ biến"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Batch Evals</span>
+              <span className="hidden md:inline">Template Test</span>
             </button>
           )}
 
@@ -174,10 +174,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenPlayground}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold text-emerald-300 transition-colors shadow-sm"
-            title="Chạy thử nghiệm prompt ngay"
+            title="Xem trước và kiểm tra cấu trúc prompt cục bộ"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span className="hidden sm:inline">Playground</span>
+            <span className="hidden sm:inline">Xem Trước</span>
           </button>
 
           {/* Export Code Button */}

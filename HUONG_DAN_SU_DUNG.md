@@ -35,6 +35,8 @@ Sau mỗi lần build lại, mở `chrome://extensions` và bấm **Reload** tr�
 
 Extension không tự bấm gửi, không đọc cookie và không yêu cầu API key.
 
+Bạn cũng có thể bôi chọn văn bản trên website bất kỳ, bấm chuột phải và chọn **Đưa phần đã chọn vào LPrompt**. Extension chỉ nhận phần văn bản đã chọn, không có quyền đọc toàn bộ mọi website.
+
 ## 3. Khi Gemini báo quá tải
 
 Extension nhận diện các thông báo như `high demand`, `try again later`, `temporarily unavailable`, `too many requests`, `rate limit` và `429`.
@@ -57,9 +59,11 @@ Nếu vẫn quá tải sau nhiều lần, giữ prompt và thử lại sau hoặ
 npm run dev
 ```
 
-Web app có compiler, thẩm định heuristic, local preview, batch structural test, few-shot builder, security scan tĩnh, thư viện và lịch sử phiên bản. Không tính phí model và không tạo phản hồi AI thật.
+Web app có compiler, thẩm định heuristic, xem trước cục bộ, template test, bộ phát hiện mơ hồ/xung đột, few-shot builder, quét guardrail tĩnh, thư viện và lịch sử phiên bản. Không tính phí model và không tạo phản hồi AI thật.
 
-`Local Prompt Preview` chỉ kiểm tra độ dài, biến template, output contract và guardrail. Để nhận phản hồi AI thật, dùng extension và Gemini Web.
+**Xem trước prompt cục bộ** chỉ kiểm tra độ dài, biến template, output contract, guardrail, điểm mơ hồ và xung đột. Số token hiển thị là ước lượng, không phải tokenizer của Gemini. Để nhận phản hồi AI thật, dùng extension và Gemini Web.
+
+Nút **Chuyển sang extension** dùng service làm cầu nối bộ nhớ tạm trong tối đa 10 phút. Dữ liệu trung chuyển không được ghi vào SQLite. Nếu service tắt hoặc request timeout, nội dung trong web app vẫn được giữ nguyên.
 
 ## 5. Windows Service
 
@@ -78,10 +82,13 @@ Service bind mặc định tại `127.0.0.1:8484`, cung cấp web app, SQLite, R
 - **Thẩm định 100đ:** heuristic theo role/context, task clarity, constraints, output format và examples/specs.
 - **Framework Compiler:** Auto, RTF, CO-STAR, CRISPE và LPrompt Pro.
 - **Few-Shot:** tạo mẫu heuristic theo domain và cho phép sửa thủ công.
-- **Batch Test:** điền biến và chạy assertion `contains`, `not_contains`, `regex`, `min_length` trên bản kiểm thử cấu trúc.
-- **Security:** quét tĩnh 10 nhóm OWASP LLM và sinh guardrail patch; không tuyên bố là dynamic red-team.
+- **Template Test:** điền biến và chạy assertion `contains`, `not_contains`, `regex`, `min_length` trên template cục bộ; không gọi AI.
+- **Kiểm tra mơ hồ/xung đột:** phát hiện giới hạn độ dài, ngôn ngữ, định dạng mâu thuẫn và các tiêu chí khó đo lường.
+- **Security:** quét tĩnh mức độ bao phủ guardrail thuộc 10 nhóm OWASP LLM và sinh patch; không tuyên bố là dynamic red-team.
 - **Xuất Prompt:** Markdown, plain text hoặc JSON; không sinh SDK/cURL/API endpoint.
 - **Versioning:** branch, commit, merge, diff và rollback.
+- Có 9 Fabric-style presets trong working tree hiện tại.
+- Không tích hợp local LLM/Ollama/LM Studio để tránh tiêu tốn tài nguyên máy không cần thiết.
 
 ## 7. Kiểm tra dự án
 
@@ -99,4 +106,10 @@ Ngoài test tự động, cần kiểm tra Chrome thật vì selector ô nhập 
 
 - Extension lưu draft, phản hồi, trạng thái cooldown và tối đa 10 snapshot trong `chrome.storage.local`.
 - Web app lưu cache thư viện/lịch sử trong browser và đồng bộ SQLite khi service sẵn sàng.
+- Bridge web → extension chỉ giữ một draft mới nhất trong RAM của service và tự hết hạn sau 10 phút. Có thể đặt `LPROMPT_EXTENSION_IDS` để giới hạn extension ID được phép đọc.
 - Bản nâng cấp sẽ xóa khóa cấu hình Gemini API cũ `lprompt_gemini_config` khỏi `localStorage`.
+
+## 9. Nhận diện thương hiệu & Logo
+
+- Biểu tượng vector SVG chính thức với chữ **L** màu hồng tím neon (`#c084fc` -> `#a855f7` -> `#d946ef` -> `#ec4899`), lồng ghép ký hiệu prompt chevron `>` và ngôi sao lấp lánh AI `✦`.
+- Hiển thị đồng bộ tại favicon (`public/favicon.svg`), tiêu đề tab trình duyệt `LPrompts Studio - AI Prompt Engineering & PromptOps IDE`, và thanh điều hướng giao diện web (`src/components/Logo.tsx`).

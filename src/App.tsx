@@ -573,7 +573,7 @@ export function App() {
                       type="button"
                       onClick={() => setIsSecurityModalOpen(true)}
                       className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold transition-colors"
-                      title="Quét lỗ hổng bảo mật Red-Teaming (OWASP LLM Top 10)"
+                      title="Quét tĩnh mức độ bao phủ guardrail OWASP LLM Top 10"
                     >
                       <Shield className="w-3.5 h-3.5" />
                       <span>Quét Bảo Mật</span>
@@ -606,7 +606,7 @@ export function App() {
                       title="Chạy kiểm thử hàng loạt Test Suite"
                     >
                       <Layers className="w-3.5 h-3.5" />
-                      <span>Batch Test</span>
+                      <span>Template Test</span>
                     </button>
                   </div>
 
@@ -639,7 +639,7 @@ export function App() {
                       <button
                         onClick={() => handleOpenPlaygroundWith(evaluation.improved_prompt)}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-xs font-bold transition-colors"
-                        title="Chạy thử nghiệm bản nâng cấp trong Playground"
+                        title="Xem trước bản nâng cấp cục bộ"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         <span>Chạy Thử</span>
@@ -675,10 +675,10 @@ export function App() {
                       <button
                         onClick={() => handleOpenBatchEvalWith(evaluation.improved_prompt)}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 hover:text-white text-xs font-medium transition-colors"
-                        title="Chạy Batch Test Suite"
+                        title="Kiểm thử template cục bộ"
                       >
                         <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Batch Test</span>
+                        <span>Template Test</span>
                       </button>
 
                       <button
