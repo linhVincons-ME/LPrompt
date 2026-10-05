@@ -28,6 +28,16 @@ import { FewShotSynthesizerModal } from './components/FewShotSynthesizerModal';
 import { BatchEvaluationModal } from './components/BatchEvaluationModal';
 import { PresetHubModal } from './components/PresetHubModal';
 import {
+  checkServiceHealth,
+  fetchServerPrompts,
+  saveServerPrompt,
+  deleteServerPrompt,
+  fetchServerVersions,
+  saveServerVersion,
+  deleteServerVersion,
+  type ServiceHealth
+} from './services/apiClient';
+import {
   Sparkles,
   Zap,
   Copy,
@@ -107,6 +117,30 @@ export function App() {
     const saved = localStorage.getItem('lprompt_versions');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // v2.5 Service & SQLite Sync
+  const [serviceStatus, setServiceStatus] = useState<ServiceHealth | null>(null);
+
+  // Sync with background LPrompt Service on mount
+  useEffect(() => {
+    checkServiceHealth().then(async (status) => {
+      setServiceStatus(status);
+      if (status.online) {
+        // Sync prompts from embedded SQLite
+        const serverPrompts = await fetchServerPrompts();
+        if (serverPrompts && serverPrompts.length > 0) {
+          setSavedPrompts(serverPrompts);
+          localStorage.setItem('lprompt_saved_prompts', JSON.stringify(serverPrompts));
+        }
+        // Sync versions from embedded SQLite
+        const serverVersions = await fetchServerVersions();
+        if (serverVersions && serverVersions.length > 0) {
+          setVersions(serverVersions);
+          localStorage.setItem('lprompt_versions', JSON.stringify(serverVersions));
+        }
+      }
+    });
+  }, []);
 
   // Sync variables whenever rawPrompt changes
   useEffect(() => {
@@ -211,7 +245,8 @@ export function App() {
     const updated = [newEntry, ...savedPrompts];
     setSavedPrompts(updated);
     localStorage.setItem('lprompt_saved_prompts', JSON.stringify(updated));
-    alert('Đã lưu prompt vào thư viện cá nhân!');
+    saveServerPrompt(newEntry);
+    alert('Đã lưu prompt vào thư viện cá nhân (Đồng bộ SQLite)!');
   };
 
   // v1.2 Versioning handlers
@@ -233,11 +268,13 @@ export function App() {
     };
     const updated = [newVer, ...versions];
     handleSaveVersions(updated);
+    saveServerVersion(newVer);
   };
 
   const handleDeleteVersion = (versionId: string) => {
     const updated = versions.filter((v) => v.id !== versionId);
     handleSaveVersions(updated);
+    deleteServerVersion(versionId);
   };
 
   const handleRollbackVersion = (version: PromptVersion) => {
@@ -306,6 +343,7 @@ export function App() {
         onOpenFewShot={() => handleOpenFewShotWith()}
         onOpenBatchEval={() => handleOpenBatchEvalWith()}
         onOpenPresetHub={() => setIsPresetHubOpen(true)}
+        serviceStatus={serviceStatus || undefined}
         versionCount={versions.length}
         savedCount={savedPrompts.length}
       />
@@ -699,6 +737,7 @@ export function App() {
           const filtered = savedPrompts.filter((x) => x.id !== id);
           setSavedPrompts(filtered);
           localStorage.setItem('lprompt_saved_prompts', JSON.stringify(filtered));
+          deleteServerPrompt(id);
         }}
       />
 

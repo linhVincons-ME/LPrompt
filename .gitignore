@@ -27,3 +27,12 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Local SQLite Database & Backups
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/backups/*
+!data/backups/.gitkeep
+!data/.gitkeep

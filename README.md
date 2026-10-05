@@ -1,88 +1,95 @@
 # 🚀 LPrompt Studio - Universal Prompt Engineering & PromptOps IDE
 
 > **LPrompt Studio** là nền tảng máy bàn và web chuyên nghiệp dành cho kỹ sư Prompt (Prompt Engineer) và lập trình viên AI. Ứng dụng tích hợp bộ máy thẩm định điểm số chuẩn 100 điểm song ngữ (Việt - Anh), phân tích thiếu sót kỹ thuật, **phân hệ chuyên biệt đưa sang Google Gemini Pro để tối ưu hóa toàn diện prompt lên chuẩn Production-Ready (95 - 100 điểm)**, cùng bộ công cụ PromptOps toàn diện:
-> - **v2.0 (Mới nhất):** Batch Evaluation & Test Suite Matrix (chuẩn promptfoo/Langfuse), DSPy-style Auto Few-Shot Synthesizer, Fabric-Style Presets Hub.
+> - **v2.5 (Mới nhất):** Local Background Service (Daemon port 8484), Portable Embedded SQLite Database (`data/lprompt.db`), Model Context Protocol (MCP) Server cho Cursor & Claude Desktop, Silent VBS Launcher.
+> - **v2.0:** Batch Evaluation & Test Suite Matrix (chuẩn promptfoo/Langfuse), DSPy-style Auto Few-Shot Synthesizer, Fabric-Style Presets Hub.
 > - **v1.2:** Git-Style Versioning & 1-Click Rollback, Word-Level Visual Diff Highlighter, Red-Teaming Security Scanner (OWASP LLM Top 10) & Auto-Patch Guardrails.
 > - **v1.1:** Live Execution Playground, Template Engine `{{variable}}`, Multi-SDK 1-Click Exporter (Python, TypeScript, cURL, JSON).
 
 ![LPrompt Studio Banner](https://img.shields.io/badge/Status-Production--Ready-emerald?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-v2.0_Batch_Evals_%26_Few--Shot-indigo?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v2.5_Local_Service_%26_Embedded_SQLite-indigo?style=for-the-badge)
 ![AI Engine](https://img.shields.io/badge/AI_Engine-Google_Gemini_Pro_%2F_Flash-4285F4?style=for-the-badge&logo=google)
+![Database](https://img.shields.io/badge/Database-Embedded_SQLite_3-003B57?style=for-the-badge&logo=sqlite)
+![Protocol](https://img.shields.io/badge/Protocol-Model_Context_Protocol_(MCP)-8A2BE2?style=for-the-badge)
 ![React 19](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss)
 ![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)
 
 ---
 
-## 🌟 Tính Năng Đột Phá Trong Phiên Bản v2.0
+## 🌟 Tính Năng Đột Phá Trong Phiên Bản v2.5 (Local Service & Embedded SQLite)
 
-### 1. Batch Evaluation & Test Suite Matrix (Kiểm Thử Hàng Loạt Chuẩn promptfoo / Langfuse)
-* **Kiểm Thử Định Lượng Nhiều Trường Hợp Cùng Lúc:** Không chỉ test 1 trường hợp đơn lẻ, bạn có thể thiết lập tập dữ liệu (Dataset Matrix) gồm nhiều bộ biến `{{variable}}` khác nhau.
-* **4 Quy Tắc Thẩm Định (Assertion Rules):**
-  * 🔤 **Contains:** Kiểm tra kết quả có chứa từ khóa hoặc cấu trúc kỳ vọng.
-  * 🚫 **Not Contains:** Kiểm tra kết quả không vi phạm điều cấm (ví dụ: không chứa từ chối, không suy diễn).
-  * 🧩 **Regex:** Khớp biểu thức chính quy phức tạp (ví dụ: kiểm tra định dạng email, mã code, cú pháp Markdown).
-  * 📏 **Min Length:** Đảm bảo độ sâu chi tiết của câu trả lời đạt số ký tự tối thiểu.
-* **Bảng Ma Trận & Thống Kê Công Nghiệp:**
-  * 📊 **Tỷ lệ vượt qua (Pass Rate %):** Đánh giá độ ổn định của prompt trên quy mô lớn.
-  * ⚡ **Độ trễ trung bình (Avg Latency ms):** Đo lường hiệu năng phản hồi trên từng case.
-  * 📑 **Bảng kết quả chi tiết:** Trạng thái ✅ PASS / ❌ FAIL, lý do chi tiết và nội dung AI trả về thực tế.
-  * 💾 **1-Click Xuất Báo Cáo:** Xuất toàn bộ kết quả ra file JSON phục vụ lưu trữ hoặc tích hợp CI/CD.
+### 1. 🗄️ Portable Embedded Database (`data/lprompt.db`)
+* **Lưu Trữ Nhúng Trực Tiếp Trong Ứng Dụng:** Cơ sở dữ liệu SQLite nằm ngay tại thư mục dự án (`d:\DevV2\LPrompt\data\lprompt.db`) thay vì ổ `C:\Users\...`.
+* **Miễn Nhiễm Với Sự Cố Cài Lại Windows:** Khi Windows bị lỗi hoặc format ổ C:, toàn bộ kho prompt, lịch sử phiên bản và cấu hình trên ổ D: vẫn **nguyên vẹn 100%**.
+* **Tính Cơ Động Tuyệt Đối (100% Portable):** Bạn có thể copy cả thư mục LPrompt sang máy khác hoặc USB, cắm vào là chạy ngay với đầy đủ dữ liệu.
+* **Tự Động Sao Lưu Dự Phòng (Auto-Backup Snapshots):** Mỗi ngày service tự tạo một bản snapshot sao lưu JSON trong thư mục `data/backups/`.
 
-### 2. DSPy-Style Auto Few-Shot Synthesizer (Tự Động Sinh Cặp Mẫu Vàng)
-* **Tổng Hợp Mẫu Vàng Tự Động:** Dựa trên nguyên lý của thư viện Stanford DSPy, Gemini Pro tự động phân tích nhiệm vụ và các biến trong prompt để tạo ra 2–3 cặp Input/Output mẫu chất lượng cao (Golden Examples).
-* **Grounding & Triệt Tiêu Ảo Giác:** Các ví dụ Few-Shot giúp mô hình AI hiểu sâu sắc schema đầu ra, phong cách lập luận và các điều kiện biên (Edge Cases).
-* **Tùy Biến Linh Hoạt & 1-Click Tích Hợp:** Cho phép chỉnh sửa từng cặp Input/Output và nhấp nút **"Gắn Few-Shot Vào Prompt"** để tự động đạt điểm tuyệt đối 15/15đ cho trụ cột C5 (`[EXAMPLES & SPECS]`).
+### 2. ⚡ Local Background Service (PromptOps Daemon trên cổng 8484)
+* **Chạy Ngầm Siêu Nhẹ:** Tiêu thụ cực ít tài nguyên (**~25MB - 60MB RAM**), khởi động tức thì trong 0.1 giây.
+* **REST API Gateway Mở:** Cung cấp các endpoint nội bộ cho mọi công cụ, script Python, terminal hoặc extension gọi vào:
+  * `GET/POST /api/prompts`: Quản lý kho prompt trong SQLite.
+  * `GET/POST /api/versions`: Quản lý các mốc phiên bản Git-style.
+  * `GET /api/presets`: Lấy danh mục prompt từ Presets Hub.
+  * `POST /api/backup`: Kích hoạt sao lưu tức thì.
+  * `GET /health`: Kiểm tra trạng thái service và tài nguyên.
+* **Web Serving Trực Tiếp:** Service phục vụ thẳng giao diện Studio tại `http://localhost:8484`.
 
-### 3. Fabric-Style Presets Hub (Kho Mẫu Chuyên Sâu Tích Hợp Sẵn)
-* **Kho Mẫu Chuẩn Quốc Tế:** Lấy cảm hứng từ triết lý mẫu của Daniel Miessler Fabric và Awesome-Prompts, tích hợp sẵn các prompt giải quyết bài toán phức tạp trong thực tế:
-  * 📊 **Kinh Doanh & Chiến Lược:** Phân tích SWOT & Ma trận TOWS, Điều tra nguyên nhân gốc rễ 5-Whys, OKR Breakdown.
-  * 💻 **Kỹ Thuật & Code:** Thẩm tra an toàn mã nguồn (OWASP Security Audit), Tái cấu trúc Clean Architecture & SOLID, OpenAPI Spec Generator.
-  * ✍️ **Copywriting & Marketing:** Chuỗi Cold Email B2B tỷ lệ mở 60%+, Kịch bản High-Converting Landing Page, SEO Content Pillar.
-  * 🎨 **Đa Phương Thức:** Prompt Midjourney v6/Flux siêu thực đầy đủ lens máy ảnh và ánh sáng, Prompt chỉ đạo camera video Sora/Kling/Runway Gen-3.
-  * 🔬 **Nghiên Cứu & Học Thuật:** Phản biện bài báo khoa học (Academic Paper Critique), Phân tích bằng sáng chế.
-* **Bộ Lọc Đa Năng & 1-Click Tải:** Tìm kiếm theo từ khóa, lọc theo danh mục, xem trước prompt và đưa thẳng vào Workspace để tối ưu hoặc chạy thử.
+### 3. 🔌 Model Context Protocol (MCP) Server Tích Hợp
+* Hỗ trợ chuẩn kết nối **MCP (Model Context Protocol)** của Anthropic.
+* **Tích Hợp Sâu Vào Cursor, Claude Desktop, Antigravity:** Cho phép các AI Assistant gọi trực tiếp vào LPrompt Service như một tool:
+  * `lprompt_evaluate`: Thẩm định chất lượng prompt theo thang điểm 100.
+  * `lprompt_list_presets`: Tìm kiếm và nạp prompt chuyên sâu theo ngành.
+  * `lprompt_get_versions`: Tra cứu lịch sử phiên bản prompt trong database.
+  * `lprompt_commit_version`: Commit phiên bản mới vào SQLite.
+
+### 4. 🤫 Silent Windows Launcher (Không Hiện Cửa Sổ Console)
+* **`Start_LPrompt_Service.vbs`:** Khởi chạy service ngầm hoàn toàn tĩnh lặng, không có cửa sổ đen CMD chắn màn hình.
+* **`Run_LPrompt_Service.bat`:** Tự động build, kích hoạt service và mở ngay trình duyệt tại `http://localhost:8484`.
+* **`Stop_LPrompt_Service.bat`:** 1-Click dừng service giải phóng cổng 8484 khi không sử dụng.
+
+---
+
+## 🚀 Tính Năng v2.0 (Batch Evaluation, DSPy Few-Shot & Presets Hub)
+
+### 5. Batch Evaluation & Test Suite Matrix (Kiểm Thử Hàng Loạt Chuẩn promptfoo / Langfuse)
+* Thử nghiệm đồng thời hàng chục bộ biến `{{variable}}` với 4 quy tắc kiểm tra: `Contains`, `Not Contains`, `Regex`, `Min Length`.
+* Báo cáo chỉ số: Tỷ lệ thành công (Pass Rate %), Độ trễ trung bình (Avg Latency ms), xuất file kết quả JSON.
+
+### 6. DSPy-Style Auto Few-Shot Synthesizer
+* Tự động sinh 2–3 cặp Input/Output mẫu chuẩn vàng (Golden Examples) gắn vào prompt (+15đ C5), giúp LLM bám sát schema và triệt tiêu ảo giác.
+
+### 7. Fabric-Style Presets Hub
+* Kho mẫu prompt chuẩn quốc tế phân theo 5 ngành: Kinh Doanh & Chiến Lược, Lập Trình & Bảo Mật, Copywriting B2B, Đa Phương Thức (Ảnh/Video), Nghiên Cứu Khoa Học.
 
 ---
 
 ## 🛡️ Tính Năng v1.2 (PromptOps, Versioning & Security)
 
-### 4. Git-Style Version Control & 1-Click Rollback
-* **Quản Lý Vòng Đời Prompt:** Đánh số phiên bản (`v1.0`, `v1.1`, `v2.0`...) kèm commit message, điểm số chất lượng và timestamp.
-* **Phân Tầng Giai Đoạn:** 📝 Draft (Nháp) ➔ 🧪 Testing (Thử nghiệm) ➔ 🚀 Production (Chạy thật).
-* **1-Click Rollback:** Phục hồi tức thì nội dung bất kỳ phiên bản nào trong quá khứ mà không làm mất lịch sử các phiên bản khác.
+### 8. Git-Style Version Control & 1-Click Rollback
+* Quản lý mốc phiên bản (`v1.0`, `v1.1`, `v2.0`...) kèm commit message, stage (Draft/Testing/Production) và phục hồi tức thì với 1-Click Rollback.
 
-### 5. Visual Diff Highlighter (So Sánh Trực Quan Từng Từ)
-* **Thuật Toán LCS:** Đánh dấu rõ ràng thêm mới (`+` xanh lục) và xóa bỏ (`-` đỏ gạch ngang).
-* **2 Chế Độ Xem:** Inline Diff (dòng liên tục) và Side-by-Side Split View (hai cột song song).
+### 9. Visual Diff Highlighter (So Sánh Trực Quan Từng Từ)
+* Thuật toán LCS so sánh từng từ: Xanh lá (`+`) thêm mới, Đỏ gạch ngang (`-`) loại bỏ; hỗ trợ Inline Diff và Split View.
 
-### 6. Red-Teaming Security Scanner & Auto-Patch Guardrails
-* **Thẩm định an toàn OWASP LLM Top 10:** Quét Prompt Injection, System Prompt Leakage, Hallucination và Persona Override.
-* **1-Click Auto-Patch Guardrails:** Tự động chèn các rào chắn kỹ thuật kiên cố vào cuối prompt để chống chọi tức thì với các đòn tấn công.
+### 10. Red-Teaming Security Scanner & Auto-Patch Guardrails
+* Quét lỗ hổng OWASP LLM Top 10 (Injection, Leakage, Hallucination, Persona Override) và 1-Click tự động vá rào chắn kỹ thuật.
 
 ---
 
-## ⚡ Tính Năng v1.1 (Playground, Template & Code Exporter)
+## ⚡ Tính Năng v1.1 & v1.0
 
-### 7. Live Execution Playground
-* Chạy thử prompt thực tế qua Gemini API; đo lường chính xác độ trễ (Latency ms), thống kê Token (Input/Output/Total) và ước tính chi phí USD ($).
+### 11. Live Execution Playground & Dynamic Variables `{{variable}}`
+* Chạy thử prompt thực tế qua Gemini API; đo lường độ trễ (Latency ms), Token usage và chi phí USD ($).
+* Nhận diện tự động cú pháp `{{ten_bien}}` và sinh form nhập liệu trực quan.
 
-### 8. Bộ Xử Lý Biến Động & Template Engine (`{{variable}}`)
-* Tự động quét cú pháp `{{ten_bien}}`, sinh form nhập liệu trực quan và nội suy thời gian thực khi chạy thử nghiệm hoặc xuất code.
+### 12. Xuất Mã Nguồn SDK 1-Click
+* Chuyển đổi prompt thành code: 🐍 **Python** (`google-genai`), 🔷 **TypeScript** (`@google/genai`), 💻 **cURL**, 📄 **JSON Spec**.
 
-### 9. Xuất Mã Nguồn SDK 1-Click
-* Chuyển đổi prompt thành mã nguồn hoàn chỉnh: 🐍 **Python** (`google-genai`), 🔷 **TypeScript** (`@google/genai`), 💻 **cURL**, 📄 **JSON Spec**.
+### 13. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
+* Gửi prompt thô sang Gemini Pro để tái cấu trúc đạt điểm tuyệt đối 95-100 điểm theo 4 framework: `CO-STAR`, `CRISPE`, `RTF`, `STANDARD-PRO`.
 
----
-
-## 💎 Các Tính Năng Cốt Lõi Khác
-
-### 10. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
-* Đưa prompt thô ban đầu sang Gemini Pro để phân tích ngữ nghĩa sâu và tái cấu trúc thành prompt chuẩn công nghiệp.
-* Bộ chọn mục tiêu: Production 100đ, Negative Guardrails, Strict JSON Schema, CoT Reasoning, Tham số chuyên ngành.
-* 4 Khung Kỹ thuật: `CO-STAR`, `CRISPE`, `RTF`, `STANDARD-PRO`.
-
-### 11. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ (Bilingual Scoring Rubric)
+### 14. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ
 ```
 [Tổng điểm: 100]
 ├── C1: [ROLE & CONTEXT] - Vai trò & Ngữ cảnh (20đ)
@@ -94,31 +101,25 @@
 
 ---
 
-## 🛠️ Hướng Dẫn Cài Đặt Thủ Công
+## 🛠️ Hướng Dẫn Khởi Động Service v2.5
 
-```bash
-# 1. Clone repository
-git clone https://github.com/linhVincons-ME/LPrompt.git
-cd LPrompt
+### Cách 1: Khởi động 1-Click kèm mở trình duyệt (Khuyên dùng)
+* Nhấp đúp vào file **[`Run_LPrompt_Service.bat`](Run_LPrompt_Service.bat)**.
+* Hệ thống tự động kích hoạt service ngầm và mở trình duyệt tại: **`http://localhost:8484`**.
 
-# 2. Cài đặt thư viện
-npm install
+### Cách 2: Khởi động ngầm hoàn toàn tĩnh lặng
+* Nhấp đúp vào file **[`Start_LPrompt_Service.vbs`](Start_LPrompt_Service.vbs)**.
+* Service chạy ngầm êm ái (**0 cửa sổ console**). Dữ liệu tự động lưu vào `data/lprompt.db`.
 
-# 3. Khởi động môi trường phát triển
-npm run dev
-
-# 4. Build sản phẩm production
-npm run build
-```
-
-Mở trình duyệt tại: `http://localhost:5173`
+### Dừng Service:
+* Nhấp đúp vào file **[`Stop_LPrompt_Service.bat`](Stop_LPrompt_Service.bat)** để tắt service.
 
 ---
 
 ## 🔒 Bảo Mật & Mô Hình BYOK (Bring Your Own Key)
 * Người dùng tự nhập Google Gemini API Key lấy miễn phí từ [Google AI Studio](https://aistudio.google.com/apikey).
-* Khóa API chỉ lưu duy nhất trong `localStorage` trên máy người dùng, không bao giờ gửi về máy chủ thứ ba.
-* Hỗ trợ chuyển đổi giữa **`gemini-2.0-flash` (Khuyên dùng - Miễn phí 1.500 lượt/ngày, tốc độ <1s)** và **`gemini-1.5-pro` (Suy luận chuyên sâu)**.
+* Khóa API chỉ lưu duy nhất trong máy bạn, không bao giờ gửi về máy chủ thứ ba.
+* Hỗ trợ chuyển đổi giữa **`gemini-2.0-flash` (Miễn phí 1.500 lượt/ngày, tốc độ <1s)** và **`gemini-1.5-pro` (Suy luận chuyên sâu)**.
 
 ---
 

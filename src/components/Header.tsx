@@ -34,6 +34,7 @@ interface HeaderProps {
   onOpenFewShot?: () => void;
   onOpenBatchEval?: () => void;
   onOpenPresetHub?: () => void;
+  serviceStatus?: { online: boolean; port?: number; dbPath?: string };
   versionCount: number;
   savedCount: number;
 }
@@ -52,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenFewShot,
   onOpenBatchEval,
   onOpenPresetHub,
+  serviceStatus,
   versionCount,
   savedCount
 }) => {
@@ -215,6 +217,25 @@ export const Header: React.FC<HeaderProps> = ({
             <Key className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden xl:inline">API Key</span>
           </button>
+
+          {/* Service & Database Indicator */}
+          {serviceStatus?.online ? (
+            <span
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-bold text-emerald-400 cursor-default"
+              title={`Local Service đang chạy tại port ${serviceStatus.port || 8484}\nDB: SQLite Nhúng (data/lprompt.db)`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>SQLite :8484</span>
+            </span>
+          ) : (
+            <span
+              className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/60 border border-slate-800 text-[10px] font-medium text-slate-400 cursor-default"
+              title="Chế độ Local Browser (Offline-first)"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+              <span>Local Cache</span>
+            </span>
+          )}
 
           {/* GitHub Repo */}
           <a
