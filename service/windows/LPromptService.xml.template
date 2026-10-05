@@ -1,0 +1,27 @@
+<service>
+  <id>LPrompt</id>
+  <name>LPrompt Studio</name>
+  <description>LPrompt local-first PromptOps web, REST and MCP service.</description>
+  <executable>{{NODE_EXE}}</executable>
+  <arguments>&quot;{{APP_ROOT}}\server\index.js&quot;</arguments>
+  <workingdirectory>{{APP_ROOT}}</workingdirectory>
+  <startmode>{{START_MODE}}</startmode>
+  {{DELAYED_AUTO_START}}
+  <serviceaccount>
+    <username>NT AUTHORITY\LocalService</username>
+  </serviceaccount>
+  <env name="LPROMPT_HOST" value="127.0.0.1" />
+  <env name="LPROMPT_PORT" value="8484" />
+  <env name="LPROMPT_DB_FILE" value="{{DATA_DIR}}\lprompt.db" />
+  <env name="LPROMPT_REQUEST_TIMEOUT_MS" value="30000" />
+  <env name="LPROMPT_SHUTDOWN_TIMEOUT_MS" value="12000" />
+  {{PYTHON_ENV}}
+  <stoptimeout>20 sec</stoptimeout>
+  <hidewindow>true</hidewindow>
+  <onfailure action="restart" delay="5 sec" />
+  <onfailure action="restart" delay="15 sec" />
+  <onfailure action="none" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>{{LOG_DIR}}</logpath>
+  <log mode="roll" />
+</service>

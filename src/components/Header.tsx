@@ -77,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
                 LPrompts <span className="text-fuchsia-400 font-semibold text-sm">Studio</span>
               </h1>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30">
-                PROMPTOPS v2.5
+                PROMPTOPS v3.0
               </span>
             </div>
             <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, bảo mật &amp; kiểm soát phiên bản Prompt Git-Style</p>
@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Wand2 className="w-3.5 h-3.5 text-pink-300" />
-            <span>Tối Ưu Gemini Pro</span>
+            <span>Biên Dịch Prompt</span>
           </button>
         </div>
 

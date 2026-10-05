@@ -2,7 +2,7 @@
 chcp 65001 >nul
 net session >nul 2>&1
 if errorlevel 1 goto elevate
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0service\windows\Stop-LPromptService.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0service\windows\Install-LPromptService.ps1" -StartAfterInstall
 set "LPROMPT_EXIT=%errorlevel%"
 if not "%LPROMPT_EXIT%"=="0" pause
 exit /b %LPROMPT_EXIT%

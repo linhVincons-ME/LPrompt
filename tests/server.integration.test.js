@@ -18,14 +18,14 @@ describe('local service and MCP integration', () => {
     service = await startServer({ host: '127.0.0.1', port: 0 });
   });
   afterAll(async () => {
-    await service.close();
+    await Promise.all([service.close(), service.close()]);
     delete process.env.LPROMPT_DB_FILE;
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   });
 
   it('serves health and rejects invalid payloads', async () => {
     const health = await fetch(`http://127.0.0.1:${service.port}/health`).then((res) => res.json());
-    expect(health).toMatchObject({ status: 'ok', version: '3.0.0' });
+    expect(health).toMatchObject({ status: 'ok', lifecycle: 'ready', activeDspyProcesses: 0, version: '3.0.0' });
     const invalid = await fetch(`http://127.0.0.1:${service.port}/api/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     expect(invalid.status).toBe(400);
     const blockedOrigin = await fetch(`http://127.0.0.1:${service.port}/health`, { headers: { Origin: 'https://attacker.example' } });

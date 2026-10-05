@@ -9,10 +9,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:extension": "tsc -p tsconfig.extension.json && vite build --config vite.extension.config.ts",
+    "service:install": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Install-LPromptService.ps1",
+    "service:start": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Start-LPromptService.ps1",
+    "service:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Stop-LPromptService.ps1",
+    "service:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Restart-LPromptService.ps1",
+    "service:status": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Get-LPromptServiceStatus.ps1",
+    "service:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File service/windows/Uninstall-LPromptService.ps1",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run test && npm run build",
+    "check": "npm run lint && npm run test && npm run build && npm run build:extension",
     "start": "node server/index.js",
     "preview": "vite preview"
   },
@@ -29,6 +36,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@types/chrome": "^0.1.36",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

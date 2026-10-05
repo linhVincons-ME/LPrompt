@@ -6,7 +6,8 @@ Tài liệu này mô tả đúng trạng thái working tree hiện tại. Các �
 
 - Node.js 24 trở lên.
 - Python 3.10 trở lên chỉ bắt buộc nếu dùng bước biên dịch DSPy.
-- Gemini API key chỉ cần khi chạy model Gemini thật.
+- Chrome 114 trở lên nếu dùng extension.
+- Gemini API key chỉ cần khi web app chủ động gọi API; luồng extension cạnh Gemini Web không cần key.
 
 ```powershell
 npm ci
@@ -19,9 +20,59 @@ Nếu dùng DSPy:
 py -3 -m pip install -r python/requirements.txt
 ```
 
-## 2. Khởi động
+## 2. Chrome Extension — cách dùng mặc định
 
-### Service production
+Build extension:
+
+```powershell
+npm run build:extension
+```
+
+Mở `chrome://extensions`, bật Developer mode, chọn **Load unpacked** và trỏ tới `D:\DevV2\LPrompt\extension-dist`. Mở Gemini Web, bấm biểu tượng LPrompt để mở Side Panel.
+
+Quy trình sử dụng:
+
+1. Chọn domain và `Tự động`, `RTF`, `CO-STAR`, `CRISPE` hoặc `LPrompt Pro`.
+2. Nhập yêu cầu gốc và chỉ thị bổ sung, sau đó bấm **Biên dịch prompt cục bộ**.
+3. Đọc lại prompt. Bấm **Chèn vào Gemini** để điền ô soạn; extension không tự bấm gửi.
+4. Tự bấm gửi trong Gemini sau khi đã kiểm tra.
+5. Khi cần lưu kết quả, chọn đoạn phản hồi hoặc bấm **Nhập phản hồi**, rồi lưu snapshot.
+
+`Auto` chọn khung theo domain, từ khóa và độ dài. Bốn framework tạo cấu trúc khác nhau; `LPrompt Pro` là khung riêng của dự án cho tác vụ production, không được mô tả như một tiêu chuẩn ngành. Dữ liệu extension được lưu cục bộ bằng `chrome.storage.local`, tối đa 10 snapshot. Extension chỉ khai báo host permission cho `gemini.google.com`, không đọc cookie, không tự gửi prompt và không đọc phản hồi cho tới khi người dùng bấm nút.
+
+Nếu Gemini thay đổi DOM, extension sẽ báo không tìm thấy ô nhập/phản hồi. Hãy reload tab sau khi cài hoặc cập nhật extension; nếu vẫn lỗi thì selector trong `extension/contentScript.ts` cần được cập nhật.
+
+## 3. Khởi động web app và service tùy chọn
+
+### Cài Windows Service — khuyến nghị
+
+Double-click `Install_LPrompt_Windows_Service.bat` và chấp nhận UAC. Installer thực hiện:
+
+1. Kiểm tra Node.js 24+ và build production.
+2. Tải WinSW 2.12.0 từ release chính thức và bắt buộc khớp SHA-256 đã pin.
+3. Tạo config runtime trong `service/windows/runtime`.
+4. Cấp `LocalService` quyền đọc/chạy ứng dụng và quyền ghi riêng trên `data`, `runtime/logs`.
+5. Đăng ký service tên `LPrompt` ở chế độ `Manual`, bật service và chờ `/health` trả `ready`.
+
+Sau khi cài:
+
+- `Run_LPrompt_Service.bat`: Turn on và mở trình duyệt.
+- `Stop_LPrompt_Service.bat`: Turn off an toàn.
+- `Restart_LPrompt_Service.bat`: restart.
+- `Get_LPrompt_Service_Status.bat`: xem trạng thái SCM và health.
+- `Uninstall_LPrompt_Windows_Service.bat`: gỡ service nhưng không xóa database/log.
+
+Các file `.bat` tự yêu cầu UAC khi cần và đóng sau khi thao tác hoàn tất; không để cửa sổ CMD chạy nền. Có thể điều khiển cùng service trong `services.msc` hoặc bằng các npm script `service:*` từ PowerShell Administrator.
+
+Mặc định service không tự chạy khi boot. Muốn Automatic Delayed Start, chạy từ PowerShell Administrator:
+
+```powershell
+.\service\windows\Install-LPromptService.ps1 -StartMode Automatic -DelayedAutoStart -StartAfterInstall
+```
+
+Nếu máy offline, tải trước đúng `WinSW-x64.exe` 2.12.0 rồi truyền `-WinSwSource`; file vẫn phải khớp SHA-256. Nếu cần DSPy dưới `LocalService`, nên dùng Python cài system-wide và truyền đường dẫn tuyệt đối bằng `-PythonExe`.
+
+### Chạy trực tiếp để debug
 
 ```powershell
 npm run build
@@ -38,14 +89,15 @@ npm run dev
 
 Vite thường chạy tại `http://localhost:5173`. Giao diện sẽ thử kết nối service tại `http://127.0.0.1:8484`; nếu service không chạy, thư viện và lịch sử vẫn dùng cache trình duyệt nhưng REST, SQLite, MCP và DSPy backend không khả dụng.
 
-### Script Windows
+### Script Windows bổ sung
 
-- `Run_LPrompt_Service.bat`: cài package nếu thiếu, build production, chạy service ẩn, đợi `/health` tối đa 15 giây rồi mới mở trình duyệt.
-- `Start_LPrompt_Service.vbs`: chỉ khởi chạy `node server/index.js` trong cửa sổ ẩn; script này không tự kiểm tra health và không hiện thông báo thành công.
-- `Run_LPrompt_Service_Console.bat`: chạy service trong console để xem log.
-- `Stop_LPrompt_Service.bat`: đọc `data/lprompt.pid`, xác minh PID là tiến trình Node rồi mới dừng. Script không quét và kill mọi tiến trình đang dùng cổng 8484.
+- `Start_LPrompt_Service.vbs`: launcher tương thích, yêu cầu UAC rồi bật Windows Service; không tạo tiến trình Node rời.
+- `Run_LPrompt_Service_Console.bat`: chạy trực tiếp trong console để debug, không đi qua SCM.
+- Log service nằm trong `service/windows/runtime/logs`. PID file chỉ còn là dữ liệu chẩn đoán; các script không dùng PID để force-kill.
 
-## 3. Cấu hình service
+Khi stop, server chuyển lifecycle sang `stopping`, từ chối request mới, đóng idle connection, hủy DSPy đang chạy, chờ tối đa 12 giây rồi mới force-close HTTP connection còn lại. WinSW cho tổng cộng 20 giây trước khi cưỡng bức wrapper.
+
+## 4. Cấu hình service
 
 Các biến mẫu nằm trong `.env.example`. Vite nạp biến `VITE_*` khi chạy/build frontend; tiến trình Node hiện không dùng `dotenv`, nên các biến `LPROMPT_*` phải được đặt trong shell, process manager hoặc công cụ nạp env bên ngoài.
 
@@ -54,6 +106,7 @@ Các biến mẫu nằm trong `.env.example`. Vite nạp biến `VITE_*` khi ch�
 | `LPROMPT_HOST` | `127.0.0.1` | Địa chỉ bind |
 | `LPROMPT_PORT` | `8484` | Cổng HTTP |
 | `LPROMPT_REQUEST_TIMEOUT_MS` | `30000` trong file mẫu | Timeout request phía server |
+| `LPROMPT_SHUTDOWN_TIMEOUT_MS` | `12000` | Deadline graceful shutdown; bị giới hạn 1–60 giây |
 | `LPROMPT_DB_FILE` | `data/lprompt.db` | Có thể đổi đường dẫn database |
 | `LPROMPT_PYTHON` | `py` trên Windows, `python3` trên hệ khác | Runtime cho DSPy |
 | `VITE_LPROMPT_API_BASE` | `http://127.0.0.1:8484` trong file mẫu | Base URL được đóng vào frontend bởi Vite |
@@ -70,7 +123,7 @@ Client remote phải gửi `Authorization: Bearer <token>`. Cấu hình này kh�
 
 Giao diện browser hiện không có ô cấu hình Bearer token cho remote mode. Vì vậy remote bind phù hợp cho API/MCP client tự gửi header hoặc hệ thống có reverse proxy xử lý xác thực; đồng bộ REST từ giao diện browser sẽ nhận `401` nếu không có lớp trung gian phù hợp.
 
-## 4. Gemini API
+## 5. Gemini API tùy chọn
 
 Mở nút `API Key`, nhập key, chọn model và bấm kiểm tra kết nối. Khi lưu, cấu hình nằm trong `localStorage` của trình duyệt.
 
@@ -86,7 +139,7 @@ Giá và quota có thể thay đổi; kiểm tra [danh sách model](https://ai.g
 
 API key không được đưa vào code export hoặc SQLite. Tuy nhiên `localStorage` không phải secret vault. Với DSPy, key được gửi tới service local và truyền cho tiến trình Python qua stdin.
 
-## 5. Evaluator và Optimizer
+## 6. Evaluator và Compiler
 
 ### Evaluator
 
@@ -102,11 +155,11 @@ Chọn một trong năm domain: research, image, video, code hoặc audio. Nút 
 
 Điểm số không chứng minh prompt sẽ đạt chất lượng tương ứng trên mọi model hoặc dữ liệu thực tế.
 
-### Optimizer
+### Framework Compiler
 
-Tab giao diện vẫn mang nhãn `Tối Ưu Gemini Pro`, nhưng request thực tế dùng model đang chọn trong cấu hình. Người dùng có thể chọn mục tiêu, framework và instruction bổ sung. Kết quả là bản đề xuất cần được review, chạy Playground và Batch Test trước khi dùng.
+Tab `Biên Dịch Prompt` luôn chạy compiler cục bộ trước. Không có API key, kết quả chính là prompt do framework compiler tạo ra. Có API key, model đang chọn chỉ review tiếp bản đã compile. Điểm cũ/mới đều do evaluator cục bộ tính lại, không tin điểm tự khai báo của model. Kết quả vẫn cần được review, chạy Playground và Batch Test trước khi dùng.
 
-## 6. Template và Playground
+## 7. Template và Playground
 
 Biến có dạng `{{ten_bien}}`. Ứng dụng tự tạo form nhập giá trị và chỉ thay thế biến có giá trị không rỗng; placeholder chưa nhập được giữ nguyên.
 
@@ -116,7 +169,7 @@ Playground:
 - Không có API key: trả về output mô phỏng, được đánh dấu `simulation`; không phải phản hồi từ Gemini.
 - Đóng modal sẽ hủy request đang chạy. Gemini client cũng có timeout cấu hình.
 
-## 7. Batch Evaluation
+## 8. Batch Evaluation
 
 Batch Evaluation hỗ trợ bốn assertion:
 
@@ -129,7 +182,7 @@ Test case được chạy tuần tự. Có API key thì từng case gọi Gemini
 
 Đây là runner nội bộ, không phải tích hợp trực tiếp với promptfoo hoặc Langfuse.
 
-## 8. Few-shot và DSPy
+## 9. Few-shot và DSPy
 
 Quy trình hiện tại gồm hai bước:
 
@@ -144,7 +197,7 @@ Quy trình hiện tại gồm hai bước:
 
 Nút `Gắn Few-Shot Vào Prompt` chèn các ví dụ hiện có vào section `[EXAMPLES & SPECS]`. Thao tác này không đảm bảo tự động tăng một số điểm cố định hoặc loại bỏ hoàn toàn ảo giác.
 
-## 9. Version graph
+## 10. Version graph
 
 Mở `Lịch Sử` hoặc `Phiên Bản` để:
 
@@ -164,7 +217,7 @@ Khi service online, commit được lưu vào localStorage rồi gửi sang SQLi
 
 Nút `So sánh Diff` hoặc biểu tượng compare trong lịch sử mở chế độ so sánh theo token. Giao diện có Inline View và Split View, đồng thời cho phép áp dụng phần nội dung bên phải vào editor. Đây là diff hiển thị, không phải thuật toán merge ba chiều; merge branch dùng logic riêng trong version graph.
 
-## 10. Security scanner
+## 11. Security scanner
 
 Scanner static kiểm tra sự hiện diện của guardrail liên quan đến 10 nhóm OWASP for LLM Applications:
 
@@ -177,14 +230,14 @@ Scanner static kiểm tra sự hiện diện của guardrail liên quan đến 1
 
 Payload động hiện phát hiện bằng canary và các chỉ dấu output xác định. Nó không thay thế pentest, policy engine hoặc đánh giá thủ công.
 
-## 11. Presets, thư viện và code export
+## 12. Presets, thư viện và code export
 
 - Presets Hub có năm category: business, engineering, copywriting, multimodal và research.
 - Thư viện prompt lưu ở localStorage và đồng bộ SQLite khi service online.
 - Code export hỗ trợ Python `google-genai`, TypeScript `@google/genai`, cURL và JSON.
 - Export luôn dùng `YOUR_GEMINI_API_KEY` hoặc biến môi trường, không chép key đang cấu hình.
 
-## 12. SQLite và backup
+## 13. SQLite và backup
 
 Database mặc định: `data/lprompt.db`. SQLite bật WAL, foreign keys và busy timeout 5 giây. Schema hiện có các bảng:
 
@@ -198,7 +251,7 @@ Snapshot `data/backups/lprompt_snapshot_YYYYMMDD.json` được ghi atomic lúc 
 
 API key và các cấu hình chỉ nằm trong browser localStorage không được đưa vào backup SQLite.
 
-## 13. REST và MCP
+## 14. REST và MCP
 
 REST endpoints:
 
@@ -234,31 +287,34 @@ Ví dụ cấu hình cho MCP client hỗ trợ remote Streamable HTTP:
 
 Cú pháp cấu hình chính xác phụ thuộc MCP client và phiên bản của client đó.
 
-## 14. Kiểm thử và giới hạn đã biết
+## 15. Kiểm thử và giới hạn đã biết
 
 ```powershell
 npm run lint
 npm test
 npm run build
+npm run build:extension
 npm run check
 ```
 
 Trạng thái kiểm tra gần nhất:
 
 - lint sạch;
-- 7 test file, 20/20 test case đạt;
-- production build đạt;
+- 10 test file, 34/34 test case đạt;
+- web app production build và extension production build đạt;
+- manifest trỏ đúng tới side panel/service worker/content script sau build;
+- PowerShell service scripts/XML qua parser validation; package WinSW, shutdown và DSPy cancellation có test hồi quy; tiến trình Node thật đã được smoke-test health, SIGINT, PID cleanup và SQLite unlock;
 - REST, SQLite DTO và MCP integration đạt trên database tạm;
 - `npm audit` báo 0 vulnerability;
 - `pip check` không báo dependency Python hỏng.
 
-Chưa được xác minh tự động với API key Gemini thật. Các test Gemini dùng mock response; DSPy đã được kiểm tra dependency, import, API signature, missing-runtime và process timeout nhưng chưa chạy compile qua Gemini thật. Vite còn cảnh báo bundle JavaScript chính khoảng 525 kB sau minify.
+Chưa được xác minh bằng cách load unpacked trên Chrome có tài khoản Gemini đăng nhập, chưa cài/gỡ service thật bằng UAC trong test tự động và chưa chạy tự động với API key Gemini thật. Các test Gemini dùng mock response; DSPy đã được kiểm tra dependency, import, API signature, missing-runtime, process timeout và cancellation khi shutdown nhưng chưa chạy compile qua Gemini thật. Vite còn cảnh báo bundle JavaScript web app khoảng 531 kB sau minify.
 
-## 15. Dữ liệu runtime và Git
+## 16. Dữ liệu runtime và Git
 
-Các file database, WAL, PID, backup runtime, `dist`, `node_modules` và `.env` được ignore khỏi Git.
+Các file database, WAL, PID, backup runtime, `dist`, `extension-dist`, `service/windows/runtime`, `node_modules` và `.env` được ignore khỏi Git.
 
-## 16. Nhận diện thương hiệu & Logo
+## 17. Nhận diện thương hiệu & Logo
 
 - **Biểu tượng chữ L chủ đạo**: Thiết kế vector SVG với chữ **L** cách điệu bằng dải màu gradient hồng tím (`#c084fc` -> `#a855f7` -> `#d946ef` -> `#ec4899`), đồng bộ với phong cách giao diện tối của phần mềm.
 - **Dấu ấn AI & Prompt**: Kết hợp ký hiệu prompt chevron `>` và ngôi sao lấp lánh `✦` (Gemini Sparkle) phát sáng neon trong lòng chữ L.

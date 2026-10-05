@@ -485,7 +485,7 @@ export function App() {
             onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
             onOpenPlayground={(p) => handleOpenPlaygroundWith(p)}
             onOpenCodeExport={(p) => handleOpenCodeExportWith(p)}
-            onOpenVisualDiff={(orig, mod) => handleOpenVisualDiff(orig, mod, 'Prompt Gốc', 'Gemini Pro Tối Ưu')}
+            onOpenVisualDiff={(orig, mod) => handleOpenVisualDiff(orig, mod, 'Prompt Gốc', 'Prompt Đã Biên Dịch')}
             onOpenFewShot={(p) => handleOpenFewShotWith(p)}
             onOpenBatchEval={(p) => handleOpenBatchEvalWith(p)}
           />
@@ -684,7 +684,7 @@ export function App() {
                       className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/30"
                     >
                       <Wand2 className="w-4 h-4 text-pink-200" />
-                      <span>Tối Ưu Gemini Pro</span>
+                      <span>Biên Dịch Prompt</span>
                     </button>
 
                     <button

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { PromptDomain, GeminiConfig } from '../types';
 import { optimizePromptWithGeminiPro, type OptimizationResult } from '../services/optimizer';
+import { FRAMEWORK_OPTIONS, type PromptFramework } from '../services/frameworkCompiler';
 import {
   Sparkles,
   ArrowRight,
@@ -46,8 +47,8 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   onOpenBatchEval
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
-  const [selectedGoal, setSelectedGoal] = useState('production_100');
-  const [selectedFramework, setSelectedFramework] = useState('CO-STAR');
+  const [selectedGoal, setSelectedGoal] = useState('production_ready');
+  const [selectedFramework, setSelectedFramework] = useState<PromptFramework>('AUTO');
   const [customInstruction, setCustomInstruction] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
@@ -55,14 +56,12 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   const [copied, setCopied] = useState(false);
 
   const goals = [
-    { id: 'production_100', label: 'Mục tiêu Production', desc: 'Bổ sung đầy đủ 5 trụ cột kỹ thuật' },
-    { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi (Negative Rules)', desc: 'Chống ảo giác và suy diễn lan man' },
-    { id: 'strict_json', label: 'Ép Schema Đầu Ra (JSON/Bảng)', desc: 'Định dạng dữ liệu chuẩn máy đọc' },
-    { id: 'cot_reasoning', label: 'Tư Duy Logic Từng Bước (CoT)', desc: 'Phân rã bài toán phức tạp theo pha' },
-    { id: 'multimodal_specs', label: 'Tối Ưu Tham Số Chuyên Ngành', desc: 'Ánh sáng, camera, render, code stack' },
+    { id: 'production_ready', label: 'Sẵn sàng Production', desc: 'Rõ input, constraints, output và fallback', instruction: 'Tạo prompt có contract rõ ràng, kiểm tra được và xử lý an toàn khi thiếu dữ liệu.' },
+    { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi', desc: 'Giảm ảo giác và suy diễn ngoài dữ liệu', instruction: 'Ưu tiên guardrails, chỉ rõ dữ liệu không đủ và không tự bịa thông tin.' },
+    { id: 'strict_json', label: 'Ép Schema Đầu Ra', desc: 'Định dạng JSON hoặc bảng máy đọc được', instruction: 'Định nghĩa output schema chặt chẽ và yêu cầu tuân thủ đúng kiểu dữ liệu.' },
+    { id: 'verifiable_reasoning', label: 'Lập Luận Có Thể Kiểm Tra', desc: 'Kết luận, giả định và bằng chứng ngắn gọn', instruction: 'Trả kết luận cùng giả định và căn cứ có thể kiểm tra; không yêu cầu chain-of-thought riêng tư.' },
+    { id: 'multimodal_specs', label: 'Thông Số Chuyên Ngành', desc: 'Ánh sáng, camera, render hoặc code stack', instruction: 'Bổ sung thông số kỹ thuật đặc thù domain khi chúng thực sự liên quan.' },
   ];
-
-  const frameworks = ['CO-STAR', 'CRISPE', 'RTF', 'STANDARD-PRO'];
 
   const handleOptimize = async (instructionOverride = customInstruction) => {
     if (!inputPrompt.trim()) {
@@ -77,14 +76,14 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
       const res = await optimizePromptWithGeminiPro(
         inputPrompt,
         domain,
-        selectedGoal,
+        goals.find((goal) => goal.id === selectedGoal)?.instruction ?? selectedGoal,
         selectedFramework,
         instructionOverride,
         config
       );
       setOptimizationResult(res);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Lỗi khi gọi Gemini Pro.');
+      setErrorMessage(err.message || 'Không thể biên dịch hoặc review prompt.');
     } finally {
       setIsOptimizing(false);
     }
@@ -98,7 +97,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      {/* Top Banner: Dedicated Gemini Pro Workspace */}
+      {/* Top Banner: local-first compiler workspace */}
       <div className="bg-gradient-to-r from-purple-950/60 via-indigo-950/60 to-slate-900/90 border border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md flex flex-wrap items-center justify-between gap-4 shadow-xl shadow-indigo-950/20">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 p-0.5 flex items-center justify-center shadow-lg shadow-purple-500/30">
@@ -108,19 +107,19 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white tracking-tight m-0">Gemini Pro Prompt Optimizer</h2>
+              <h2 className="text-base font-bold text-white tracking-tight m-0">LPrompt Framework Compiler</h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                PRO ENGINE v1.1
+                LOCAL-FIRST v3.0
               </span>
             </div>
             <p className="text-xs text-slate-300 m-0">
-              Gửi prompt gốc sang Gemini Pro để chỉnh sửa, tái cấu trúc và đại tu đạt điểm tuyệt đối 95 - 100 điểm
+              Biên dịch prompt cục bộ theo framework thực; API Gemini chỉ là bước review tùy chọn
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-400">Động cơ:</span>
+            <span className="text-slate-400">Reviewer tùy chọn:</span>
           <span className="font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-indigo-300">
             {config.model}
           </span>
@@ -129,7 +128,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               onClick={onOpenApiKeyModal}
               className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors"
             >
-              Cấu hình API Key (Free)
+              Bật API reviewer (tùy chọn)
             </button>
           )}
         </div>
@@ -166,26 +165,26 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           <div className="md:col-span-4 space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">Khung Kỹ Thuật (Framework):</label>
             <div className="grid grid-cols-2 gap-1.5">
-              {frameworks.map((fw) => (
-                <button
-                  key={fw}
-                  onClick={() => setSelectedFramework(fw)}
+              {FRAMEWORK_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => setSelectedFramework(option.id)}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all text-center ${
-                    selectedFramework === fw
+                    selectedFramework === option.id
                       ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/20'
                       : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
-                  {fw}
-                </button>
-              ))}
+                    {option.label}
+                  </button>
+                ))}
             </div>
           </div>
 
           {/* Custom user instruction */}
           <div className="md:col-span-8 space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">
-              Chỉ Thị Bổ Sung Cho Gemini Pro (Tùy chọn):
+              Chỉ Thị Bổ Sung (Tùy chọn):
             </label>
             <div className="relative">
               <input
@@ -207,18 +206,10 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
-          {!config.apiKey && (
-            <button
-              onClick={onOpenApiKeyModal}
-              className="underline font-semibold hover:text-white"
-            >
-              Nhập API Key
-            </button>
-          )}
         </div>
       )}
 
-      {/* Main Split Comparison: Original Prompt vs Gemini Pro Refined */}
+      {/* Main Split Comparison: source vs compiled prompt */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Input / Original Prompt */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
@@ -239,7 +230,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           <textarea
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
-            placeholder="Nhập prompt thô ban đầu cần đưa sang Gemini Pro tối ưu..."
+            placeholder="Nhập prompt thô cần biên dịch theo framework..."
             className="w-full flex-1 min-h-[260px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
           />
 
@@ -272,25 +263,25 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               {isOptimizing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Gemini Pro Đang Tái Cấu Trúc...</span>
+                  <span>Đang Biên Dịch / Review...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>✨ ĐƯA SANG GEMINI PRO TỐI ƯU HÓA</span>
+                  <span>✨ BIÊN DỊCH PROMPT</span>
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* Right: Gemini Pro Optimized Output */}
+        {/* Right: compiled output */}
         <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-4 flex flex-col gap-3 shadow-xl shadow-purple-950/20">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <div className="flex items-center gap-2">
               <FileCheck className="w-4 h-4 text-emerald-400" />
               <span className="text-xs font-bold text-white uppercase tracking-wider">
-                Bản Gemini Pro Đã Chỉnh Sửa
+                Prompt Đã Biên Dịch
               </span>
             </div>
             {optimizationResult && (
@@ -384,13 +375,13 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
         </div>
       </div>
 
-      {/* Bottom Diagnostics: Detailed Explanation & Changes Made by Gemini Pro */}
+      {/* Bottom Diagnostics */}
       {optimizationResult && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 backdrop-blur-md space-y-4 animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-purple-400" />
-              <span>Báo Cáo Tinh Chỉnh Của Gemini Pro (Audit Log)</span>
+              <span>Báo Cáo Biên Dịch (Audit Log)</span>
             </h3>
             <span className="text-xs font-mono text-purple-300">
               Khung áp dụng: {optimizationResult.framework_applied}
@@ -411,7 +402,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               </ul>
             </div>
 
-            {/* Gemini Pro Explanation */}
+            {/* Compiler explanation */}
             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2">
               <span className="text-xs font-bold text-slate-300">Tại Sao Bản Sửa Đổi Này Lại Tốt Hơn?</span>
               <p className="text-xs text-slate-300 leading-relaxed">
@@ -423,7 +414,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           {/* Interactive Chat Refinement Loop */}
           <div className="pt-3 border-t border-slate-800">
             <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
-              💬 Chưa hoàn toàn ưng ý? Gửi yêu cầu tinh chỉnh tiếp cho Gemini Pro:
+              💬 Chưa hoàn toàn ưng ý? Thêm yêu cầu rồi biên dịch lại:
             </label>
             <div className="flex items-center gap-2">
               <input

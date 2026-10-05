@@ -511,7 +511,7 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 }
 
 /**
- * Đánh giá chuyên sâu & nâng cấp Prompt đạt 95-100 điểm bằng Gemini API
+ * Đánh giá chuyên sâu và đề xuất nâng cấp prompt bằng Gemini API.
  */
 export async function evaluatePromptWithGemini(
   prompt: string,
@@ -549,7 +549,7 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON với cấu trúc:
     "pros": ["Điểm mạnh 1 (viết bằng tiếng Việt)", "Điểm mạnh 2"],
     "missing": ["Điểm thiếu sót 1 (nêu rõ nếu còn thiếu)", "Điểm thiếu sót 2"]
   },
-  "improved_prompt": "<Nội dung prompt đã được tối ưu hoàn thiện 95-100 điểm, chuyên nghiệp, sẵn sàng copy vào model đích>",
+  "improved_prompt": "<Nội dung prompt đã được cải thiện, sẵn sàng để người dùng review và kiểm thử với model đích>",
   "target_domain": "${domain}"
 }
 `;

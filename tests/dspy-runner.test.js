@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runDspyOptimizer } from '../server/dspyRunner.js';
+import { cancelActiveDspyProcesses, getActiveDspyProcessCount, runDspyOptimizer } from '../server/dspyRunner.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,5 +11,14 @@ describe('DSPy process boundary', () => {
   });
   it('kills an optimizer process at the configured deadline', async () => {
     await expect(runDspyOptimizer({}, { timeoutMs: 30, pythonCommand: process.execPath, scriptPath: hangFixture })).rejects.toThrow('DSPy vượt quá thời gian chờ');
+  });
+  it('cancels active optimizer processes during service shutdown', async () => {
+    const running = runDspyOptimizer({}, { timeoutMs: 10_000, pythonCommand: process.execPath, scriptPath: hangFixture });
+    const rejected = expect(running).rejects.toThrow('service đang dừng');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(getActiveDspyProcessCount()).toBe(1);
+    await cancelActiveDspyProcesses();
+    await rejected;
+    expect(getActiveDspyProcessCount()).toBe(0);
   });
 });

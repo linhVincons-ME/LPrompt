@@ -7,7 +7,7 @@ import * as z from 'zod/v4';
 import { initDatabase, getAllPrompts, savePrompt, deletePrompt, getAllVersions, saveVersion, deleteVersion, exportFullBackup, closeDatabase, DB_FILE, DATA_DIR } from './db.js';
 import { FABRIC_PRESETS } from './presetsData.js';
 import { handleMcpRequest } from './mcpServer.js';
-import { runDspyOptimizer } from './dspyRunner.js';
+import { cancelActiveDspyProcesses, getActiveDspyProcessCount, runDspyOptimizer } from './dspyRunner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
@@ -34,7 +34,7 @@ function httpError(status, message) {
   return error;
 }
 
-export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1' } = {}) {
+export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serviceState = { lifecycle: 'ready' } } = {}) {
   const isLoopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
   const remoteToken = process.env.LPROMPT_AUTH_TOKEN || '';
   const allowedHosts = (process.env.LPROMPT_ALLOWED_HOSTS || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -46,6 +46,13 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1' } = {
   const app = createMcpExpressApp({ host, ...(isLoopback ? {} : { allowedHosts }) });
   app.disable('x-powered-by');
   app.use(express.json({ limit: '2mb' }));
+  app.use((req, res, next) => {
+    if (serviceState.lifecycle === 'stopping' && req.path !== '/health') {
+      res.setHeader('Connection', 'close');
+      return res.status(503).json({ error: 'LPrompt service đang dừng.' });
+    }
+    next();
+  });
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -60,7 +67,7 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1' } = {
     if (req.method === 'OPTIONS') res.sendStatus(204); else next();
   });
 
-  app.get('/health', (req, res) => res.json({ status: 'ok', service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
+  app.get('/health', (req, res) => res.json({ status: serviceState.lifecycle === 'ready' ? 'ok' : serviceState.lifecycle, lifecycle: serviceState.lifecycle, service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), activeDspyProcesses: getActiveDspyProcessCount(), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
   app.get('/api/prompts', (_req, res) => res.json({ success: true, data: getAllPrompts() }));
   app.post('/api/prompts', (req, res) => res.status(201).json({ success: true, data: savePrompt(promptSchema.parse(req.body)) }));
   app.delete('/api/prompts/:id', (req, res) => res.json(deletePrompt(req.params.id)));
@@ -100,7 +107,8 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1' } = {
 }
 
 export async function startServer({ host = process.env.LPROMPT_HOST || '127.0.0.1', port = Number(process.env.LPROMPT_PORT || process.env.PORT || 8484) } = {}) {
-  const app = createApp({ host });
+  const serviceState = { lifecycle: 'starting' };
+  const app = createApp({ host, serviceState });
   const server = await new Promise((resolve, reject) => {
     const instance = app.listen(port, host, () => resolve(instance));
     instance.on('error', reject);
@@ -112,17 +120,71 @@ export async function startServer({ host = process.env.LPROMPT_HOST || '127.0.0.
   const actualPort = typeof address === 'object' && address ? address.port : port;
   const cleanup = () => { try { if (fs.readFileSync(PID_FILE, 'utf8').trim() === String(process.pid)) fs.unlinkSync(PID_FILE); } catch { /* already removed */ } };
   server.on('close', cleanup);
+  serviceState.lifecycle = 'ready';
   console.log(`[LPrompt] v3.0.0 listening on http://${host}:${actualPort} (PID ${process.pid})`);
-  const close = () => new Promise((resolve, reject) => server.close((error) => {
-    if (error) return reject(error);
-    try { closeDatabase(); resolve(); } catch (closeError) { reject(closeError); }
-  }));
-  return { app, server, host, port: actualPort, close };
+  let closePromise;
+  const close = ({ timeoutMs = Number(process.env.LPROMPT_SHUTDOWN_TIMEOUT_MS || 12_000) } = {}) => {
+    if (closePromise) return closePromise;
+    closePromise = (async () => {
+      serviceState.lifecycle = 'stopping';
+      const boundedTimeout = Number.isFinite(timeoutMs) ? Math.min(Math.max(timeoutMs, 1_000), 60_000) : 12_000;
+      let forced = false;
+      const httpClosed = new Promise((resolve) => {
+        let finished = false;
+        const finish = () => { if (!finished) { finished = true; clearTimeout(timer); resolve(); } };
+        const timer = setTimeout(() => {
+          forced = true;
+          server.closeAllConnections?.();
+          finish();
+        }, boundedTimeout);
+        timer.unref?.();
+        server.close((error) => {
+          if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') console.error('[LPrompt] HTTP close warning:', error);
+          finish();
+        });
+        server.closeIdleConnections?.();
+      });
+      const cancelledDspy = await cancelActiveDspyProcesses('DSPy đã bị hủy vì LPrompt service đang dừng.');
+      await httpClosed;
+      closeDatabase();
+      cleanup();
+      console.log(`[LPrompt] Service stopped${forced ? ' after forcing remaining HTTP connections closed' : ' gracefully'}; cancelled DSPy processes: ${cancelledDspy}.`);
+      return { forced, cancelledDspy };
+    })();
+    return closePromise;
+  };
+  return { app, server, host, port: actualPort, serviceState, close };
 }
 
 const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isDirectRun) startServer().then((service) => {
-  const shutdown = () => service.close().then(() => { process.exitCode = 0; }).catch((error) => { console.error('[LPrompt] Shutdown failed:', error); process.exitCode = 1; });
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  let shutdownPromise;
+  const shutdown = (reason, error, exitCode = 0) => {
+    if (shutdownPromise) {
+      if (exitCode) process.exitCode = exitCode;
+      return shutdownPromise;
+    }
+    if (error) console.error(`[LPrompt] Fatal ${reason}:`, error);
+    else console.log(`[LPrompt] Received ${reason}; stopping...`);
+    const hardDeadline = Math.min(Math.max(Number(process.env.LPROMPT_SHUTDOWN_TIMEOUT_MS || 12_000), 1_000), 60_000) + 5_000;
+    const hardExit = setTimeout(() => {
+      console.error('[LPrompt] Hard shutdown deadline exceeded.');
+      process.exit(exitCode || 1);
+    }, hardDeadline);
+    hardExit.unref?.();
+    shutdownPromise = service.close().then(() => {
+      clearTimeout(hardExit);
+      process.exitCode = exitCode;
+    }).catch((closeError) => {
+      clearTimeout(hardExit);
+      console.error('[LPrompt] Shutdown failed:', closeError);
+      process.exitCode = 1;
+    });
+    return shutdownPromise;
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  if (process.platform === 'win32') process.once('SIGBREAK', () => void shutdown('SIGBREAK'));
+  process.once('uncaughtException', (error) => void shutdown('uncaughtException', error, 1));
+  process.once('unhandledRejection', (reason) => void shutdown('unhandledRejection', reason, 1));
 }).catch((error) => { console.error('[LPrompt] Startup failed:', error); process.exitCode = 1; });
