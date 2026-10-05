@@ -1,3 +1,20 @@
+type TransientFailure = {
+  kind: 'overloaded' | 'rate_limited' | 'temporarily_unavailable';
+  message: string;
+};
+
+function classifyTransientFailure(text: string): TransientFailure | null {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  const patterns: Array<{ kind: TransientFailure['kind']; pattern: RegExp }> = [
+    { kind: 'overloaded', pattern: /high demand|spikes? in demand|quá tải|lưu lượng (?:đang )?cao/i },
+    { kind: 'rate_limited', pattern: /too many requests|rate limit|resource exhausted|\b429\b|quá nhiều yêu cầu|giới hạn (?:tốc độ|yêu cầu)/i },
+    { kind: 'temporarily_unavailable', pattern: /temporarily unavailable|service unavailable|try again later|please try again|tạm thời không khả dụng|thử lại sau/i }
+  ];
+  const match = patterns.find((candidate) => candidate.pattern.test(normalized));
+  return match ? { kind: match.kind, message: normalized.slice(0, 500) } : null;
+}
+
 type LPromptMessage =
   | { type: 'LPROMPT_INSERT'; prompt: string }
   | { type: 'LPROMPT_IMPORT_RESPONSE' };
@@ -34,11 +51,34 @@ function insertPrompt(prompt: string): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
-function importResponse(): { ok: boolean; text?: string; error?: string } {
-  const selected = window.getSelection()?.toString().trim();
-  if (selected) return { ok: true, text: selected };
+function getVisibleResponseElements(): HTMLElement[] {
   const selectors = ['model-response', '.model-response-text', '[data-message-author-role="model"]', 'message-content'];
-  const responses = selectors.flatMap((selector) => [...document.querySelectorAll<HTMLElement>(selector)]).filter((element) => element.offsetParent !== null);
+  return selectors.flatMap((selector) => [...document.querySelectorAll<HTMLElement>(selector)])
+    .filter((element) => element.offsetParent !== null);
+}
+
+function findTransientFailure(): TransientFailure | null {
+  const selectors = ['[role="alert"]', '[aria-live="assertive"]', '[aria-live="polite"]'];
+  const candidates = [
+    ...getVisibleResponseElements(),
+    ...selectors.flatMap((selector) => [...document.querySelectorAll<HTMLElement>(selector)])
+      .filter((element) => element.offsetParent !== null)
+  ];
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const failure = classifyTransientFailure(candidates[index].innerText);
+    if (failure) return failure;
+  }
+  return null;
+}
+
+function importResponse(): { ok: boolean; text?: string; error?: string; transientFailure?: TransientFailure } {
+  const selected = window.getSelection()?.toString().trim();
+  const selectedFailure = selected ? classifyTransientFailure(selected) : null;
+  if (selectedFailure) return { ok: false, error: 'Gemini đang tạm thời quá tải.', transientFailure: selectedFailure };
+  if (selected) return { ok: true, text: selected };
+  const pageFailure = findTransientFailure();
+  if (pageFailure) return { ok: false, error: 'Gemini đang tạm thời quá tải.', transientFailure: pageFailure };
+  const responses = getVisibleResponseElements();
   const text = responses.at(-1)?.innerText.trim();
   return text
     ? { ok: true, text }
@@ -55,3 +95,18 @@ chrome.runtime.onMessage.addListener((message: LPromptMessage, _sender, sendResp
   }
   return false;
 });
+
+let lastFailureFingerprint = '';
+let lastFailureNotifiedAt = 0;
+const observer = new MutationObserver(() => {
+  const failure = findTransientFailure();
+  if (!failure) return;
+  const fingerprint = `${failure.kind}:${failure.message}`;
+  const now = Date.now();
+  if (fingerprint === lastFailureFingerprint && now - lastFailureNotifiedAt < 30_000) return;
+  lastFailureFingerprint = fingerprint;
+  lastFailureNotifiedAt = now;
+  void chrome.runtime.sendMessage({ type: 'LPROMPT_TRANSIENT_FAILURE', failure }).catch(() => undefined);
+});
+
+observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });

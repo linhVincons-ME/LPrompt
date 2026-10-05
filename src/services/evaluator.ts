@@ -1,20 +1,4 @@
-import type { PromptDomain, PromptEvaluation, QualityTier, GeminiConfig } from '../types';
-import { z } from 'zod';
-import { generateGeminiContent, parseGeminiJson } from './geminiClient';
-
-const evaluationSchema = z.object({
-  total_score: z.number().min(0).max(100),
-  tier: z.enum(['Xuất sắc', 'Khá', 'Trung bình', 'Yếu']).optional(),
-  breakdown: z.object({
-    role_context: z.number().min(0).max(20),
-    task_clarity: z.number().min(0).max(25),
-    constraints: z.number().min(0).max(20),
-    output_format: z.number().min(0).max(20),
-    examples_specs: z.number().min(0).max(15)
-  }),
-  critique: z.object({ pros: z.array(z.string()), missing: z.array(z.string()) }),
-  improved_prompt: z.string()
-});
+import type { PromptDomain, PromptEvaluation, QualityTier } from '../types';
 
 export function calculateTier(score: number): QualityTier {
   if (score >= 90) return 'Xuất sắc';
@@ -22,7 +6,6 @@ export function calculateTier(score: number): QualityTier {
   if (score >= 50) return 'Trung bình';
   return 'Yếu';
 }
-
 /**
  * Đánh giá Prompt cục bộ bằng Heuristic & Regex Chuẩn Song Ngữ (Việt - Anh & Thẻ tiền tố Kỹ thuật)
  * 100% MIỄN PHÍ, chạy trên Client 0ms với độ chính xác cao
@@ -443,7 +426,7 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
 }
 
 /**
- * Sinh prompt nâng cấp mẫu trên Local (khi chưa kết nối Gemini API)
+ * Sinh prompt nâng cấp mẫu hoàn toàn cục bộ.
  */
 function generateLocalImprovedPrompt(original: string, domain: PromptDomain): string {
   const clean = original.trim();
@@ -508,67 +491,4 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 [OUTPUT FORMAT]:
 - Structured GitHub Flavored Markdown with executive tables and comparative metrics.`;
   }
-}
-
-/**
- * Đánh giá chuyên sâu và đề xuất nâng cấp prompt bằng Gemini API.
- */
-export async function evaluatePromptWithGemini(
-  prompt: string,
-  domain: PromptDomain,
-  config: GeminiConfig
-): Promise<PromptEvaluation> {
-  if (!config.apiKey) {
-    throw new Error('Chưa cung cấp API Key. Vui lòng bấm vào "Cài đặt API Key" để kích hoạt.');
-  }
-
-  const systemInstruction = `
-Bạn là chuyên gia thẩm định và tối ưu Prompt (Master Prompt Architect & Evaluator).
-Nhiệm vụ của bạn là nhận vào một Prompt từ người dùng thuộc lĩnh vực: "${domain.toUpperCase()}".
-Prompt có thể được viết bằng TIẾNG ANH, TIẾNG VIỆT, HOẶC SONG NGỮ KÈM CÁC THẺ KỸ THUẬT ([ROLE], [TASK], [CONSTRAINTS], [PARAMETERS]...).
-
-HÃY THẨM ĐỊNH KHẮT KHE THEO BỘ QUY TẮC TIỀN TỐ 100 ĐIỂM DỰA TRÊN NỘI DUNG THỰC TẾ (BẤT KỂ NGÔN NGỮ NÀO):
-1. role_context (Tối đa 20đ): Có vai trò chuyên môn (Role/Persona) và bối cảnh (Context/Objective) không? (Dù viết bằng tiếng Anh như "[ROLE]: Master Artist" hay tiếng Việt).
-2. task_clarity (Tối đa 25đ): Mệnh lệnh hành động rõ ràng (Task/Instruction) và có chia nhỏ các bước logic (CoT/Step-by-step) không?
-3. constraints (Tối đa 20đ): Có quy tắc cấm kỵ (Negative rules / Negative prompt), giới hạn độ dài, phong cách giọng điệu không?
-4. output_format (Tối đa 20đ): Có định dạng output chặt chẽ (JSON Schema, Markdown table, cấu trúc thẻ, hoặc tỷ lệ khung hình) không?
-5. examples_specs (Tối đa 15đ): Có ví dụ mẫu Few-shot hoặc tham số chuyên ngành (camera, lens, aspect ratio, tech stack) không?
-
-BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON với cấu trúc:
-{
-  "total_score": <số từ 10 đến 100>,
-  "tier": "Xuất sắc" | "Khá" | "Trung bình" | "Yếu",
-  "breakdown": {
-    "role_context": <0-20>,
-    "task_clarity": <0-25>,
-    "constraints": <0-20>,
-    "output_format": <0-20>,
-    "examples_specs": <0-15>
-  },
-  "critique": {
-    "pros": ["Điểm mạnh 1 (viết bằng tiếng Việt)", "Điểm mạnh 2"],
-    "missing": ["Điểm thiếu sót 1 (nêu rõ nếu còn thiếu)", "Điểm thiếu sót 2"]
-  },
-  "improved_prompt": "<Nội dung prompt đã được cải thiện, sẵn sàng để người dùng review và kiểm thử với model đích>",
-  "target_domain": "${domain}"
-}
-`;
-
-  const generated = await generateGeminiContent(
-    `${systemInstruction}\n\nĐÂY LÀ PROMPT CẦN ĐÁNH GIÁ VÀ TỐI ƯU:\n<user_prompt>\n${prompt}\n</user_prompt>`,
-    config,
-    { responseMimeType: 'application/json', temperature: config.temperature ?? 0.2 }
-  );
-  const parsed = parseGeminiJson(generated.text, evaluationSchema);
-
-  return {
-    total_score: parsed.total_score,
-    tier: parsed.tier || calculateTier(parsed.total_score),
-    breakdown: parsed.breakdown,
-    critique: parsed.critique,
-    improved_prompt: parsed.improved_prompt,
-    target_domain: domain,
-    evaluated_at: new Date().toISOString(),
-    source: 'gemini'
-  };
 }

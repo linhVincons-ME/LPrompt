@@ -2,13 +2,12 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import type {
   PromptDomain,
   PromptEvaluation,
-  GeminiConfig,
   SavedPrompt,
   PromptVersion,
   VersionStage,
   FabricPreset
 } from './types';
-import { evaluatePromptLocally, evaluatePromptWithGemini } from './services/evaluator';
+import { evaluatePromptLocally } from './services/evaluator';
 import { SAMPLE_PROMPTS } from './data/samplePrompts';
 import { extractVariables, interpolateTemplate, getInitialVariableValues } from './utils/template';
 import { stableContentHash } from './utils/hash';
@@ -18,7 +17,6 @@ import { Header } from './components/Header';
 import { ScoreGauge } from './components/ScoreGauge';
 import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
 import { DomainToolbar } from './components/DomainToolbar';
-import { ApiKeyModal } from './components/ApiKeyModal';
 import { SavedLibraryModal } from './components/SavedLibraryModal';
 import { PromptOptimizerView } from './components/PromptOptimizerView';
 import { VariableInputsPanel } from './components/VariableInputsPanel';
@@ -40,9 +38,7 @@ import {
   deleteServerVersion,
   type ServiceHealth
 } from './services/apiClient';
-import { DEFAULT_GEMINI_MODEL } from './services/modelCatalog';
 import {
-  Sparkles,
   Zap,
   Copy,
   Check,
@@ -62,20 +58,12 @@ import {
   Layers
 } from 'lucide-react';
 
-const DEFAULT_CONFIG: GeminiConfig = {
-  apiKey: '',
-  model: DEFAULT_GEMINI_MODEL,
-  temperature: 0.2,
-  timeoutMs: 30000
-};
-
 export function App() {
   const initialSample = SAMPLE_PROMPTS.find((sample) => sample.domain === 'research')?.prompt || '';
   const [currentDomain, setCurrentDomain] = useState<PromptDomain>('research');
   const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer');
   const [rawPrompt, setRawPrompt] = useState<string>(initialSample);
   const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(() => initialSample ? evaluatePromptLocally(initialSample, 'research') : null);
-  const [isAuditing, setIsAuditing] = useState<boolean>(false);
   const [copiedOriginal, setCopiedOriginal] = useState<boolean>(false);
   const [copiedImproved, setCopiedImproved] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -85,7 +73,6 @@ export function App() {
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
 
   // Modals
-  const [isApiKeyOpen, setIsApiKeyOpen] = useState<boolean>(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [isPlaygroundOpen, setIsPlaygroundOpen] = useState<boolean>(false);
   const [playgroundPrompt, setPlaygroundPrompt] = useState<string>('');
@@ -101,29 +88,12 @@ export function App() {
   const [diffOriginalLabel, setDiffOriginalLabel] = useState<string>('Bản gốc');
   const [diffModifiedLabel, setDiffModifiedLabel] = useState<string>('Bản tối ưu');
 
-  // v2.0 Batch Evals, DSPy Few-Shot & Preset Hub Modals
+  // v2.0 Batch Evals, local Few-Shot & Preset Hub Modals
   const [isFewShotOpen, setIsFewShotOpen] = useState<boolean>(false);
   const [fewShotTargetPrompt, setFewShotTargetPrompt] = useState<string>('');
   const [isBatchEvalOpen, setIsBatchEvalOpen] = useState<boolean>(false);
   const [batchEvalTargetPrompt, setBatchEvalTargetPrompt] = useState<string>('');
   const [isPresetHubOpen, setIsPresetHubOpen] = useState<boolean>(false);
-
-  // Config & Storage
-  const [config, setConfig] = useState<GeminiConfig>(() => {
-    try {
-      const saved = safeStorageGet('lprompt_gemini_config');
-      const parsed = saved ? JSON.parse(saved) as Partial<GeminiConfig> : {};
-      const retiredModels = new Set(['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash']);
-      return {
-        ...DEFAULT_CONFIG,
-        ...parsed,
-        model: parsed.model && !retiredModels.has(parsed.model) ? parsed.model : DEFAULT_GEMINI_MODEL
-      };
-    } catch {
-      safeStorageRemove('lprompt_gemini_config');
-      return DEFAULT_CONFIG;
-    }
-  });
 
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>(() => {
     try {
@@ -164,6 +134,11 @@ export function App() {
   const initialSavedPromptsRef = useRef(savedPrompts);
   const initialVersionsRef = useRef(versions);
 
+  // Xóa cấu hình API cũ khỏi các bản nâng cấp trước; v3 extension-first không còn dùng secret này.
+  useEffect(() => {
+    safeStorageRemove('lprompt_gemini_config');
+  }, []);
+
   // Sync with background LPrompt Service on mount
   useEffect(() => {
     checkServiceHealth().then(async (status) => {
@@ -200,12 +175,6 @@ export function App() {
     });
   }, []);
 
-  // Persist config
-  const handleSaveConfig = (newConfig: GeminiConfig) => {
-    setConfig(newConfig);
-    if (!safeStorageSet('lprompt_gemini_config', newConfig)) setAuditError('Không thể lưu cấu hình vào bộ nhớ trình duyệt.');
-  };
-
   // Instant local evaluation (evaluates interpolated if variables exist)
   const handleLocalEvaluate = (
     textToEval = rawPrompt,
@@ -216,33 +185,6 @@ export function App() {
     const resolved = interpolateTemplate(textToEval, values);
     const result = evaluatePromptLocally(resolved || textToEval, domain);
     setEvaluation(result);
-  };
-
-  // Deep audit with Gemini
-  const handleGeminiAudit = async () => {
-    if (!rawPrompt.trim()) {
-      setAuditError('Vui lòng nhập nội dung prompt trước khi thẩm định.');
-      return;
-    }
-
-    if (!config.apiKey) {
-      setIsApiKeyOpen(true);
-      return;
-    }
-
-    setIsAuditing(true);
-    setAuditError(null);
-
-    const resolved = interpolateTemplate(rawPrompt, variableValues);
-    try {
-      const result = await evaluatePromptWithGemini(resolved || rawPrompt, currentDomain, config);
-      setEvaluation(result);
-    } catch (err: any) {
-      setAuditError(err.message || 'Lỗi kết nối Gemini API. Hãy kiểm tra lại API Key hoặc hạn mức.');
-      handleLocalEvaluate();
-    } finally {
-      setIsAuditing(false);
-    }
   };
 
   // Trigger Playground
@@ -455,7 +397,6 @@ export function App() {
         }}
         activeView={activeView}
         onSelectView={setActiveView}
-        onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
         onOpenLibraryModal={() => setIsLibraryOpen(true)}
         onOpenPlayground={() => handleOpenPlaygroundWith()}
         onOpenCodeExport={() => handleOpenCodeExportWith()}
@@ -471,18 +412,16 @@ export function App() {
 
       {/* Main Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
-        {/* VIEW 1: GEMINI PRO PROMPT OPTIMIZER */}
+        {/* VIEW 1: LOCAL PROMPT COMPILER */}
         {activeView === 'optimizer' ? (
           <PromptOptimizerView
             currentPrompt={rawPrompt}
             domain={currentDomain}
-            config={config}
             onApplyImproved={(newPrompt) => {
               setRawPrompt(newPrompt);
               handleLocalEvaluate(newPrompt);
               setActiveView('evaluator');
             }}
-            onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
             onOpenPlayground={(p) => handleOpenPlaygroundWith(p)}
             onOpenCodeExport={(p) => handleOpenCodeExportWith(p)}
             onOpenVisualDiff={(orig, mod) => handleOpenVisualDiff(orig, mod, 'Prompt Gốc', 'Prompt Đã Biên Dịch')}
@@ -605,12 +544,6 @@ export function App() {
                 {auditError && (
                   <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
                     <span>{auditError}</span>
-                    <button
-                      onClick={() => setIsApiKeyOpen(true)}
-                      className="underline font-semibold hover:text-white"
-                    >
-                      Kiểm tra API Key
-                    </button>
                   </div>
                 )}
 
@@ -660,7 +593,7 @@ export function App() {
                       type="button"
                       onClick={() => handleOpenFewShotWith(rawPrompt)}
                       className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold transition-colors"
-                      title="Tự động sinh ví dụ mẫu Few-Shot (DSPy)"
+                      title="Tạo ví dụ mẫu Few-Shot cục bộ"
                     >
                       <Target className="w-3.5 h-3.5" />
                       <span>Few-Shot</span>
@@ -687,17 +620,6 @@ export function App() {
                       <span>Biên Dịch Prompt</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handleGeminiAudit}
-                      disabled={isAuditing}
-                      className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30 disabled:opacity-50"
-                    >
-                      <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
-                      <span>
-                        {isAuditing ? 'Đang chấm...' : 'Chấm Gemini'}
-                      </span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -810,8 +732,7 @@ export function App() {
               <ScoreGauge
                 score={evaluation ? evaluation.total_score : 0}
                 tier={evaluation ? evaluation.tier : 'Yếu'}
-                source={evaluation ? evaluation.source : 'local'}
-                isAuditing={isAuditing}
+                isAuditing={false}
               />
 
               {/* Breakdown by 5 Criteria & Diagnostic List */}
@@ -838,13 +759,6 @@ export function App() {
       </main>
 
       {/* Modals */}
-      <ApiKeyModal
-        isOpen={isApiKeyOpen}
-        onClose={() => setIsApiKeyOpen(false)}
-        config={config}
-        onSaveConfig={handleSaveConfig}
-      />
-
       <SavedLibraryModal
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
@@ -867,7 +781,6 @@ export function App() {
         isOpen={isPlaygroundOpen}
         onClose={() => setIsPlaygroundOpen(false)}
         prompt={playgroundPrompt}
-        config={config}
       />
 
       <CodeExportModal
@@ -876,7 +789,6 @@ export function App() {
         rawPrompt={codeExportPrompt}
         interpolatedPrompt={interpolateTemplate(codeExportPrompt, variableValues)}
         hasVariables={variables.length > 0}
-        config={config}
       />
 
       {/* v1.2 Modals: Red-Teaming, Version History, Visual Diff */}
@@ -884,7 +796,6 @@ export function App() {
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
         prompt={interpolateTemplate(rawPrompt, variableValues) || rawPrompt}
-        config={config}
         onApplyPatchedPrompt={(patched) => {
           setRawPrompt(patched);
           handleLocalEvaluate(patched);
@@ -925,7 +836,6 @@ export function App() {
         isOpen={isFewShotOpen}
         onClose={() => setIsFewShotOpen(false)}
         prompt={fewShotTargetPrompt}
-        config={config}
         onApplyIntegratedPrompt={(newPrompt) => {
           setRawPrompt(newPrompt);
           handleLocalEvaluate(newPrompt);
@@ -938,7 +848,6 @@ export function App() {
         onClose={() => setIsBatchEvalOpen(false)}
         promptTemplate={batchEvalTargetPrompt}
         variables={extractVariables(batchEvalTargetPrompt)}
-        config={config}
       />
 
       <PresetHubModal

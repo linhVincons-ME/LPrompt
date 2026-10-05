@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import type { GeminiConfig, FewShotExample } from '../types';
+import type { FewShotExample } from '../types';
 import { synthesizeFewShotExamples, integrateExamplesIntoPrompt } from '../services/fewShotSynthesizer';
-import { optimizeWithDspy } from '../services/apiClient';
 import {
   X,
   Target,
@@ -18,7 +17,6 @@ interface FewShotSynthesizerModalProps {
   isOpen: boolean;
   onClose: () => void;
   prompt: string;
-  config: GeminiConfig;
   onApplyIntegratedPrompt: (newPrompt: string) => void;
 }
 
@@ -26,7 +24,6 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
   isOpen,
   onClose,
   prompt,
-  config,
   onApplyIntegratedPrompt
 }) => {
   const [isSynthesizing, setIsSynthesizing] = useState(false);
@@ -44,7 +41,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
     setErrorMessage(null);
 
     try {
-      const res = await synthesizeFewShotExamples(prompt, config);
+      const res = await synthesizeFewShotExamples(prompt);
       setExamples(res.examples);
     } catch (err: any) {
       setErrorMessage(err.message || 'Lỗi khi tạo Few-Shot.');
@@ -92,7 +89,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white m-0">
-                  Few-Shot Synthesizer + DSPy Compiler
+                  Local Few-Shot Builder
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   v2.0 PRO
@@ -119,7 +116,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
             <div className="flex items-center gap-2 text-xs text-purple-200">
               <Info className="w-4 h-4 text-purple-400 shrink-0" />
               <span>
-                Sinh ví dụ bằng Gemini, chỉnh nhãn thủ công, sau đó dùng DSPy BootstrapFewShot thật để chọn demos cho compiled program.
+                Sinh ví dụ mẫu bằng heuristic cục bộ, sau đó chỉnh nhãn thủ công trước khi gắn vào prompt.
               </span>
             </div>
 
@@ -139,20 +136,6 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
                   <span>Tự Động Sinh Few-Shot</span>
                 </>
               )}
-            </button>
-            <button
-              onClick={async () => {
-                if (!config.apiKey) { setErrorMessage('Cần API key để DSPy chạy mô hình và chấm demos.'); return; }
-                if (examples.length < 2) { setErrorMessage('Cần tối thiểu 2 ví dụ đã gắn nhãn để tối ưu DSPy.'); return; }
-                setIsSynthesizing(true); setErrorMessage(null);
-                try { setExamples(await optimizeWithDspy(prompt, examples, config)); }
-                catch (error) { setErrorMessage(error instanceof Error ? error.message : 'DSPy optimization thất bại.'); }
-                finally { setIsSynthesizing(false); }
-              }}
-              disabled={isSynthesizing || examples.length < 2}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold disabled:opacity-50"
-            >
-              <Target className="w-4 h-4" /> Biên dịch DSPy
             </button>
           </div>
 
@@ -236,7 +219,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
               <Target className="w-10 h-10 text-slate-600 mx-auto" />
               <div className="font-semibold text-slate-400">Chưa có ví dụ Few-Shot nào</div>
               <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                Nhấp nút "Tự Động Sinh Few-Shot" ở trên để Gemini phân tích prompt của bạn và sinh ra các cặp mẫu đầu vào/đầu ra chuẩn mực.
+                Nhấp nút "Tự Động Sinh Few-Shot" để tạo các cặp mẫu cục bộ, sau đó rà soát và chỉnh sửa thủ công.
               </p>
             </div>
           )}

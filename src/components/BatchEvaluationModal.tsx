@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import type { GeminiConfig, TestCase, BatchEvaluationSummary, AssertionType } from '../types';
+import type { TestCase, BatchEvaluationSummary, AssertionType } from '../types';
 import { generateStarterTestCases, runBatchEvaluation } from '../services/batchEvaluator';
 import {
   X,
@@ -21,15 +21,13 @@ interface BatchEvaluationModalProps {
   onClose: () => void;
   promptTemplate: string;
   variables: string[];
-  config: GeminiConfig;
 }
 
 export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
   isOpen,
   onClose,
   promptTemplate,
-  variables,
-  config
+  variables
 }) => {
   const [testCases, setTestCases] = useState<TestCase[]>(() => generateStarterTestCases(variables));
   const [isRunning, setIsRunning] = useState(false);
@@ -54,7 +52,6 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
       const res = await runBatchEvaluation(
         promptTemplate,
         testCases,
-        config,
         (current, total) => setProgress({ current, total }),
         controller.signal
       );
@@ -415,7 +412,7 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
           <span>
-            {config.apiKey ? 'Chế độ: Gemini API Trực Tiếp' : 'Chế độ: Mô phỏng Offline không tốn phí'}
+            Chế độ: kiểm thử cấu trúc cục bộ, không gọi API
           </span>
           <button
             onClick={handleClose}

@@ -1,64 +1,11 @@
-import type { GeminiConfig, FewShotExample, FewShotSynthesisResult } from '../types';
-import { z } from 'zod';
-import { generateGeminiContent, parseGeminiJson } from './geminiClient';
-
-const examplesSchema = z.array(z.object({
-  input: z.string().min(1),
-  output: z.string().min(1),
-  explanation: z.string().optional()
-})).min(1).max(8);
+import type { FewShotExample, FewShotSynthesisResult } from '../types';
 
 /**
- * Synthesize 2-3 candidate Few-Shot pairs. Real DSPy compilation is exposed separately by the local service.
+ * Sinh các cặp few-shot bằng heuristic cục bộ, không gọi dịch vụ AI.
  */
 export async function synthesizeFewShotExamples(
-  prompt: string,
-  config: GeminiConfig
+  prompt: string
 ): Promise<FewShotSynthesisResult> {
-  if (config.apiKey && config.apiKey.trim().length > 10) {
-    try {
-      const systemPrompt = `You are a World-Class Few-Shot Prompt Engineer following Stanford DSPy principles.
-Your task is to analyze the user's prompt (which may contain {{variables}} or domain instructions) and synthesize 2 to 3 pristine, realistic, diverse Few-Shot (Input/Output) example pairs.
-These examples teach the LLM the exact structure, depth, schema, and quality expected.
-
-CRITICAL OUTPUT FORMAT:
-You MUST respond with a valid JSON array of objects, each containing:
-- "input": realistic user input or variable values demonstrating a representative test case.
-- "output": the gold-standard, flawless output meeting all requirements, negative constraints, and output formats.
-- "explanation": a 1-sentence note explaining why this example grounds the model and prevents hallucinations.
-
-Do NOT include markdown formatting or quotes around the JSON array. Output purely valid JSON.`;
-
-      const userContent = `${systemPrompt}\n\nHere is the target prompt:\n"""\n${prompt}\n"""\n\nGenerate 2-3 gold-standard Few-Shot Input/Output example pairs in pure JSON.`;
-
-      const generated = await generateGeminiContent(userContent, config, {
-        responseMimeType: 'application/json',
-        temperature: 0.3
-      });
-      const rawExamples = parseGeminiJson(generated.text, examplesSchema);
-      {
-        const examples: FewShotExample[] = rawExamples.map(
-          (ex: any, idx: number) => ({
-            id: `ex-${Date.now()}-${idx}`,
-            input: String(ex.input || `Mẫu đầu vào ${idx + 1}`),
-            output: String(ex.output || `Mẫu đầu ra chuẩn mực ${idx + 1}`),
-            explanation: ex.explanation ? String(ex.explanation) : undefined
-          })
-        );
-
-        if (examples.length > 0) {
-          return {
-            examples,
-            integratedPrompt: integrateExamplesIntoPrompt(prompt, examples)
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Gemini Few-Shot synthesis failed, falling back to local synthesizer:', err);
-    }
-  }
-
-  // Fallback heuristic synthesis (offline / simulation mode)
   const fallbackExamples = generateLocalFewShotExamples(prompt);
   return {
     examples: fallbackExamples,

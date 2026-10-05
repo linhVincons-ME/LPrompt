@@ -1,6 +1,5 @@
-import type { GeminiConfig, TestCase, TestCaseRunResult, BatchEvaluationSummary } from '../types';
+import type { TestCase, TestCaseRunResult, BatchEvaluationSummary } from '../types';
 import { interpolateTemplate } from '../utils/template';
-import { generateGeminiContent } from './geminiClient';
 
 /**
  * Generate starter test cases automatically based on detected variables in the prompt
@@ -120,13 +119,11 @@ function evaluateAssertion(
 export async function runBatchEvaluation(
   promptTemplate: string,
   testCases: TestCase[],
-  config: GeminiConfig,
   onProgress?: (current: number, total: number) => void,
   signal?: AbortSignal
 ): Promise<BatchEvaluationSummary> {
   const results: TestCaseRunResult[] = [];
   let totalLatency = 0;
-  const isLive = Boolean(config.apiKey && config.apiKey.trim().length > 10);
 
   for (let i = 0; i < testCases.length; i++) {
     if (signal?.aborted) throw new DOMException('Batch evaluation đã bị hủy.', 'AbortError');
@@ -137,24 +134,12 @@ export async function runBatchEvaluation(
     let tokens = 0;
 
     try {
-      if (isLive) {
-        const generated = await generateGeminiContent(resolvedPrompt, config, {
-          temperature: config.temperature ?? 0.2,
-          signal
-        });
-        actualOutput = generated.text;
-        tokens = generated.usage.totalTokens;
-      } else {
-        // High-fidelity offline simulation
-        await new Promise<void>((resolve, reject) => {
-          const timeout = globalThis.setTimeout(resolve, 450 + Math.random() * 300);
-          signal?.addEventListener('abort', () => { globalThis.clearTimeout(timeout); reject(new DOMException('Batch evaluation đã bị hủy.', 'AbortError')); }, { once: true });
-        });
-        actualOutput = `[Mô phỏng phản hồi cho ${tc.name}]\n\nYêu cầu đã được xử lý với các tham số: ${JSON.stringify(
-          tc.variables
-        )}.\n\nKết quả đáp ứng đầy đủ tiêu chí định dạng, không suy diễn lan man và cấu trúc rõ ràng.`;
-        tokens = Math.round((resolvedPrompt.length + actualOutput.length) / 4);
-      }
+      await new Promise<void>((resolve, reject) => {
+        const timeout = globalThis.setTimeout(resolve, 50);
+        signal?.addEventListener('abort', () => { globalThis.clearTimeout(timeout); reject(new DOMException('Batch evaluation đã bị hủy.', 'AbortError')); }, { once: true });
+      });
+      actualOutput = `[Bản kiểm thử cục bộ: ${tc.name}]\n\nPrompt sau khi điền biến:\n${resolvedPrompt}`;
+      tokens = Math.round((resolvedPrompt.length + actualOutput.length) / 4);
 
       const duration = Math.round(performance.now() - startTime);
       totalLatency += duration;
@@ -180,7 +165,7 @@ export async function runBatchEvaluation(
         status: 'error',
         actualOutput: '',
         latencyMs: duration,
-        reason: `Lỗi thực thi: ${err.message || 'Không thể gọi API'}`
+        reason: `Lỗi kiểm thử cục bộ: ${err.message || 'Không xác định'}`
       });
     }
 

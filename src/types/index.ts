@@ -21,7 +21,7 @@ export interface PromptEvaluation {
   improved_prompt: string;
   target_domain: PromptDomain;
   evaluated_at?: string;
-  source: 'local' | 'gemini';
+  source: 'local';
 }
 
 export interface SavedPrompt {
@@ -36,13 +36,6 @@ export interface SavedPrompt {
   created_at: string;
 }
 
-export interface GeminiConfig {
-  apiKey: string;
-  model: string;
-  temperature: number;
-  timeoutMs?: number;
-}
-
 export interface PromptExecutionResult {
   output: string;
   latencyMs: number;
@@ -51,13 +44,11 @@ export interface PromptExecutionResult {
     output: number;
     total: number;
   };
-  estimatedCostUsd: number;
-  modelUsed: string;
   executedAt: string;
-  source: 'api' | 'simulation';
+  source: 'local-preview';
 }
 
-export type ExportLanguage = 'python' | 'typescript' | 'curl' | 'json';
+export type ExportLanguage = 'markdown' | 'text' | 'json';
 
 // ==========================================
 // V1.2 PROMPTOPS, VERSIONING & RED-TEAMING
@@ -116,7 +107,7 @@ export interface DiffToken {
 }
 
 // ==========================================
-// V2.0 BATCH EVALS, DSPY FEW-SHOT & PRESET HUB
+// V2.0 BATCH EVALS, LOCAL FEW-SHOT & PRESET HUB
 // ==========================================
 
 export interface FewShotExample {
@@ -168,5 +159,4 @@ export interface FabricPreset {
   prompt: string;
   framework: string;
   tags: string[];
-  recommendedModel?: string;
 }

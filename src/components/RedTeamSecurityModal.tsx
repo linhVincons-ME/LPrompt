@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
-import type { GeminiConfig, RedTeamSecurityReport } from '../types';
-import { scanPromptSecurityWithGemini } from '../services/securityScanner';
+import React, { useState } from 'react';
+import type { RedTeamSecurityReport } from '../types';
+import { scanPromptSecurityLocally } from '../services/securityScanner';
 import {
   X,
   ShieldCheck,
@@ -19,7 +19,6 @@ interface RedTeamSecurityModalProps {
   isOpen: boolean;
   onClose: () => void;
   prompt: string;
-  config: GeminiConfig;
   onApplyPatchedPrompt: (patchedPrompt: string) => void;
 }
 
@@ -27,40 +26,30 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
   isOpen,
   onClose,
   prompt,
-  config,
   onApplyPatchedPrompt
 }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [report, setReport] = useState<RedTeamSecurityReport | null>(null);
   const [applied, setApplied] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   if (!isOpen) return null;
 
   const handleScan = async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
     setIsScanning(true);
     setApplied(false);
     setScanError(null);
     try {
-      const res = await scanPromptSecurityWithGemini(prompt, config, controller.signal);
+      const res = scanPromptSecurityLocally(prompt);
       setReport(res);
     } catch (error) {
       setScanError(error instanceof Error ? error.message : 'Quét bảo mật thất bại.');
     } finally {
-      if (abortRef.current === controller) {
-        abortRef.current = null;
-        setIsScanning(false);
-      }
+      setIsScanning(false);
     }
   };
 
   const handleClose = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
     setIsScanning(false);
     onClose();
   };
@@ -147,7 +136,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
                   ? 'Mức độ rủi ro trung bình, thiếu điều khoản chống rò rỉ prompt hoặc rào chắn ảo giác.'
                   : 'Cảnh báo nguy cơ cao! Prompt dễ bị chiếm quyền điều khiển bằng Prompt Injection.'}
               </p>
-              {report && <p className="text-[11px] text-sky-300 mt-1">Chế độ: {report.mode === 'dynamic' ? `dynamic · pass ${report.dynamicPassRate}%` : 'static (chưa có API key)'}</p>}
+              {report && <p className="text-[11px] text-sky-300 mt-1">Chế độ: phân tích tĩnh cục bộ</p>}
             </div>
           </div>
 
@@ -166,7 +155,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
         {/* Security Check Cards */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {!report && !isScanning && (
-            <button onClick={handleScan} className="w-full py-8 rounded-xl border border-dashed border-rose-500/40 bg-rose-500/5 text-sm font-semibold text-rose-300">Bắt đầu quét OWASP LLM Top 10{config.apiKey ? ' + 6 payload động' : ' (static)'}</button>
+            <button onClick={handleScan} className="w-full py-8 rounded-xl border border-dashed border-rose-500/40 bg-rose-500/5 text-sm font-semibold text-rose-300">Bắt đầu quét tĩnh OWASP LLM Top 10</button>
           )}
           {scanError && <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{scanError}</div>}
           {isScanning ? (

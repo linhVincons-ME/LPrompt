@@ -1,13 +1,12 @@
 import React, { useRef, useState } from 'react';
-import type { GeminiConfig, PromptExecutionResult } from '../types';
-import { executePromptWithGemini } from '../services/execution';
+import type { PromptExecutionResult } from '../types';
+import { previewPromptLocally } from '../services/execution';
 import {
   X,
   Play,
   Copy,
   Check,
   Clock,
-  Coins,
   Cpu,
   Loader2,
   AlertCircle,
@@ -19,14 +18,12 @@ interface LivePlaygroundModalProps {
   isOpen: boolean;
   onClose: () => void;
   prompt: string;
-  config: GeminiConfig;
 }
 
 export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
   isOpen,
   onClose,
-  prompt,
-  config
+  prompt
 }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<PromptExecutionResult | null>(null);
@@ -43,7 +40,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
     setIsRunning(true);
     setError(null);
     try {
-      const res = await executePromptWithGemini(prompt, config, controller.signal);
+      const res = await previewPromptLocally(prompt, controller.signal);
       setResult(res);
     } catch (err: any) {
       setError(err.message || 'Lỗi khi thực thi prompt.');
@@ -72,12 +69,12 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Live Execution Playground</h3>
+                <h3 className="text-base font-bold text-white">Local Prompt Preview</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
-                  v1.1 Live Run
+                  OFFLINE
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Chạy thử nghiệm prompt thực tế và đo lường độ trễ, token, chi phí</p>
+              <p className="text-xs text-slate-400">Kiểm tra nhanh cấu trúc prompt mà không gọi API hoặc gửi dữ liệu ra ngoài</p>
             </div>
           </div>
 
@@ -100,7 +97,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
         </div>
 
         {/* Metrics Banner */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-slate-950/80 border-b border-slate-800 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/80 border-b border-slate-800 text-xs">
           <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800/80">
             <Clock className="w-4 h-4 text-sky-400" />
             <div>
@@ -122,21 +119,11 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800/80">
-            <Coins className="w-4 h-4 text-amber-400" />
-            <div>
-              <div className="text-[10px] text-slate-400">Ước tính Chi Phí</div>
-              <div className="font-mono font-bold text-emerald-400">
-                {result ? `$${result.estimatedCostUsd}` : isRunning ? '...' : '--'}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800/80">
             <Sparkles className="w-4 h-4 text-pink-400" />
             <div>
-              <div className="text-[10px] text-slate-400">Model Thực Thi</div>
+              <div className="text-[10px] text-slate-400">Chế độ</div>
               <div className="font-mono font-semibold text-indigo-300 truncate max-w-[120px]">
-                {result ? result.modelUsed : config.model}
+                Local preview
               </div>
             </div>
           </div>
@@ -156,7 +143,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                Phản Hồi Từ Gemini:
+                Kết Quả Kiểm Tra Cục Bộ:
               </span>
               {result && (
                 <button
@@ -173,7 +160,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
               {isRunning ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2 py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
-                  <span>Đang kết nối Gemini và sinh phản hồi thời gian thực...</span>
+                  <span>Đang kiểm tra cấu trúc prompt...</span>
                 </div>
               ) : error ? (
                 <div className="p-3 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-start gap-2">
@@ -191,7 +178,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
 
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
-          <span>{result?.source === 'simulation' ? '⚡ Đang chạy chế độ mô phỏng Offline (Cấu hình API Key để chạy mô hình thực tế)' : '🟢 Kết nối trực tiếp Google AI Studio API'}</span>
+          <span>⚡ Không gọi API. Dùng extension để chèn prompt vào Gemini Web khi cần phản hồi thực tế.</span>
           <button
             onClick={handleClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"

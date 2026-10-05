@@ -1,122 +1,96 @@
 # LPrompts Studio 3.0
 
-Ứng dụng local-first để soạn, biên dịch, đánh giá, kiểm thử và quản lý phiên bản prompt. Đường dùng chính là Chrome Side Panel chạy trực tiếp cạnh Gemini Web, không cần API key. Web app và service Node.js vẫn được giữ cho Batch Eval, DSPy, MCP, SQLite và các luồng tự động hóa tùy chọn.
+LPrompts Studio là bộ công cụ local-first để soạn, biên dịch, đánh giá, kiểm thử và quản lý phiên bản prompt. Đường dùng chính là Chrome Side Panel chạy cạnh Gemini Web.
 
-## Điểm chính
+## Kiến trúc hiện tại
 
-- Chrome Extension Manifest V3 dùng Side Panel, chỉ có quyền trên `https://gemini.google.com/*`, không lấy cookie và không tự bấm gửi.
-- Compiler cục bộ triển khai thực sự `RTF`, `CO-STAR`, `CRISPE`, `LPrompt Pro` và chế độ `Auto`; không còn nút framework chỉ đổi tên nhưng dùng chung logic.
-- Prompt sau biên dịch có công tắc `VIE`/`ENG`, mặc định `VIE`; đổi qua lại tức thì và không gọi API. Cấu trúc do compiler sinh được chuyển hoàn toàn theo ngôn ngữ đã chọn, còn yêu cầu/chỉ thị người dùng nhập được giữ nguyên văn.
-- Gemini API là tùy chọn qua một client chung có timeout, hủy request, validation response và ước tính chi phí.
-- Model mặc định `gemini-3.8-flash`; có `gemini-3.5-flash-lite` và `gemini-3.1-pro-preview`. Giá trong `src/services/modelCatalog.ts` là giá Standard tham chiếu tại thời điểm cập nhật và chỉ dùng để ước tính.
-- Export Python, TypeScript, cURL và JSON luôn dùng placeholder/biến môi trường, không nhúng API key thật.
-- Version graph có branch, parent, merge-parent, content hash, tìm tổ tiên chung và conflict markers.
-- Few-shot gồm hai bước độc lập: sinh candidate bằng Gemini hoặc fallback cục bộ; sau đó người dùng có thể chạy DSPy `BootstrapFewShot` trên tối thiểu hai ví dụ đã gắn nhãn.
-- Scanner bao phủ 10 nhóm OWASP for LLM Applications và, khi có API key, chạy 6 payload động có timeout/hủy.
-- MCP Streamable HTTP chính thức tại `/mcp`, dùng `@modelcontextprotocol/sdk`.
-- REST payload được giới hạn/validate; service mặc định chỉ bind `127.0.0.1`, kiểm tra Origin và dùng bảo vệ DNS rebinding của MCP SDK.
+- Không gọi Gemini API, không có màn hình API key, model catalog, SDK export hoặc endpoint DSPy.
+- Compiler, evaluator, few-shot, batch structural test và security scan chạy cục bộ.
+- Extension chỉ có quyền trên `https://gemini.google.com/*`, không đọc cookie và không tự bấm gửi.
+- Web app và Windows Service chỉ phục vụ giao diện, SQLite, REST và MCP cục bộ.
+- Khi nâng cấp từ bản cũ, web app xóa khóa `lprompt_gemini_config` khỏi `localStorage`.
 
-Điểm heuristic, auto-patch và kết quả red-team là tín hiệu hỗ trợ, không phải chứng nhận an toàn hay đảm bảo chất lượng production.
+## Chrome Extension
 
-## Yêu cầu
-
-- Node.js 24 trở lên.
-- Python 3.10 trở lên nếu dùng DSPy.
-- Chrome 114 trở lên nếu dùng extension.
-- Gemini API key chỉ cần cho các chức năng chủ động gọi API; extension dùng phiên Gemini Web do người dùng tự đăng nhập và tự gửi.
-
-## Cài đặt và chạy
-
-```powershell
-npm ci
-npm run check
-npm start
-```
-
-Mở `http://127.0.0.1:8484`. Để bật bước biên dịch DSPy, cài dependency Python:
-
-```powershell
-py -3 -m pip install -r python/requirements.txt
-```
-
-## Chrome Extension — đường dùng mặc định, không API key
+Yêu cầu Chrome 114 trở lên.
 
 ```powershell
 npm ci
 npm run build:extension
 ```
 
-Trong Chrome mở `chrome://extensions`, bật Developer mode, chọn **Load unpacked** và trỏ tới thư mục `extension-dist`. Sau đó mở `https://gemini.google.com`, bấm biểu tượng LPrompt và làm theo luồng:
+Mở `chrome://extensions`, bật **Developer mode**, chọn **Load unpacked** và trỏ tới `D:\DevV2\LPrompt\extension-dist`. Sau đó mở `https://gemini.google.com`, bấm biểu tượng LPrompt để mở Side Panel.
 
-1. Nhập yêu cầu, domain và framework; bấm **Biên dịch prompt cục bộ**.
-2. Review kết quả rồi bấm **Chèn vào Gemini**. Extension chỉ điền ô soạn, không tự gửi.
-3. Người dùng tự bấm gửi trên Gemini.
-4. Bấm **Nhập phản hồi** để lấy đoạn đang chọn hoặc phản hồi cuối cùng; lưu snapshot nếu cần.
+Luồng sử dụng:
 
-Draft, tối đa 10 snapshot gần nhất và phản hồi được giữ trong `chrome.storage.local`. Không có dữ liệu nào được extension gửi về service LPrompt. Selector DOM của Gemini có thể thay đổi theo giao diện Google; khi việc chèn/nhập thất bại, extension báo lỗi thay vì treo hoặc tự thao tác tiếp.
+1. Nhập yêu cầu, domain và framework.
+2. Bấm **Biên dịch prompt cục bộ**.
+3. Chọn `VIE` hoặc `ENG`, đọc lại kết quả.
+4. Bấm **Chèn vào Gemini**. Extension chỉ điền ô soạn; người dùng tự bấm gửi.
+5. Bấm **Nhập phản hồi** để lấy phần đang chọn hoặc phản hồi cuối cùng.
+6. Lưu snapshot nếu cần.
 
-## Windows Service — bật/tắt không giữ cửa sổ CMD
+Draft, phản hồi và tối đa 10 snapshot được lưu bằng `chrome.storage.local`.
 
-Mở `Install_LPrompt_Windows_Service.bat` một lần và chấp nhận UAC. Installer sẽ build web app, tải đúng WinSW 2.12.0 từ GitHub, xác minh SHA-256, tạo service `LPrompt` chạy bằng tài khoản quyền thấp `LocalService`, sau đó kiểm tra `/health`. Chế độ mặc định là `Manual`: service chỉ chạy khi người dùng bật.
+### Bảo vệ khi Gemini quá tải
 
-- `Run_LPrompt_Service.bat`: bật service, đợi trạng thái `ready`, rồi mở web app.
-- `Stop_LPrompt_Service.bat`: gửi lệnh stop qua Windows Service Control Manager và chờ graceful shutdown; không force-kill Node.
-- `Restart_LPrompt_Service.bat`: restart và kiểm tra health.
-- `Get_LPrompt_Service_Status.bat`: xem trạng thái service và health.
-- `Uninstall_LPrompt_Windows_Service.bat`: gỡ đăng ký service, giữ nguyên database và log.
-- `Run_LPrompt_Service_Console.bat`: chỉ dành cho debug trực tiếp, có cửa sổ console.
+Content script theo dõi các thông báo quá tải/rate-limit tạm thời trên Gemini Web. Khi phát hiện:
 
-Các lệnh tương đương nằm trong `service/windows` và các npm script `service:install`, `service:start`, `service:stop`, `service:restart`, `service:status`, `service:uninstall`. Install/start/stop/restart/uninstall cần PowerShell chạy bằng Administrator; các file `.bat` tự yêu cầu UAC. Runtime wrapper và log nằm trong `service/windows/runtime` và không được commit. `LocalService` chỉ có quyền đọc/chạy code; quyền ghi được giới hạn vào `data` và thư mục `logs`.
+- prompt và bản compile vẫn được giữ nguyên;
+- lỗi không bị lưu như một phản hồi thành công;
+- extension không tự gửi lại;
+- nút chèn bị cooldown tăng dần 15, 30, 60 rồi tối đa 120 giây;
+- thông báo DOM trùng trong 10 giây không làm tăng bộ đếm;
+- người dùng chỉ có thể chèn lại thủ công sau cooldown.
 
-## Lệnh phát triển
+Cơ chế này không thể loại bỏ sự cố capacity phía Google; nó ngăn mất dữ liệu, gửi trùng và retry dồn dập.
+
+## Web app và Windows Service
+
+Chạy phát triển:
 
 ```powershell
 npm run dev
-npm run lint
-npm test
-npm run build
-npm run build:extension
+```
+
+Chạy service trực tiếp:
+
+```powershell
+npm start
+```
+
+Mở `http://127.0.0.1:8484`.
+
+Cài Windows Service bằng `Install_LPrompt_Windows_Service.bat`. Service mặc định chạy thủ công, có thể bật/tắt bằng các file `Start_...`, `Stop_...`, `Restart_...` và `Get_..._Status.bat` ở thư mục gốc.
+
+REST cục bộ:
+
+- `GET /health`
+- `GET|POST /api/prompts`
+- `DELETE /api/prompts/:id`
+- `GET|POST /api/versions`
+- `DELETE /api/versions/:id`
+- `GET /api/presets`
+- `POST /api/backup`
+
+MCP Streamable HTTP: `POST http://127.0.0.1:8484/mcp`.
+
+## Kiểm tra
+
+```powershell
 npm run check
 ```
 
-Test suite hiện có 10 file và 36 test case, gồm compiler song ngữ cho bốn framework và Auto, chuyển đổi VIE/ENG thuận nghịch, contract an toàn của extension, Windows Service package, graceful DSPy cancellation, template interpolation, evaluator cho 5 domain, version graph/merge, secret-safe export, Gemini abort/schema errors, OWASP static/dynamic, REST/SQLite và MCP integration.
+Lệnh trên chạy lint, test, web build và extension build. Kiểm thử gồm compiler song ngữ, VIE/ENG, extension safety, nhận diện quá tải/cooldown, local export, evaluator, batch, security scan tĩnh, version graph, REST/SQLite/MCP và Windows Service.
 
-## API local
+Chrome vẫn cần smoke-test thủ công sau khi load unpacked vì cấu trúc DOM của Gemini Web có thể thay đổi theo tài khoản hoặc phiên bản giao diện.
 
-- `GET /health` — gồm `lifecycle`, PID, uptime và số DSPy process đang chạy.
-- `GET|POST /api/prompts`, `DELETE /api/prompts/:id`
-- `GET|POST /api/versions`, `DELETE /api/versions/:id`
-- `GET /api/presets`
-- `POST /api/backup`
-- `POST /api/dspy/optimize`
-- `POST /mcp`
+## Dữ liệu và quyền riêng tư
 
-Bind ngoài loopback bị từ chối nếu chưa cấu hình `LPROMPT_AUTH_TOKEN` (tối thiểu 24 ký tự), `LPROMPT_ALLOWED_HOSTS` và `LPROMPT_ALLOWED_ORIGINS`. Vẫn nên đặt reverse proxy TLS và firewall phù hợp.
-
-Giao diện hiện không tự thêm Bearer token khi chạy remote. Remote mode vì vậy dành cho API/MCP client tự gửi header hoặc triển khai có reverse proxy xác thực; chế độ loopback là cấu hình được hỗ trợ trực tiếp cho giao diện local.
-
-## Dữ liệu và bí mật
-
-- Extension không yêu cầu hoặc lưu API key. Trong web app tùy chọn, API key được lưu trong `localStorage` khi người dùng lưu cấu hình và được gửi trực tiếp tới Gemini API. Tác vụ DSPy gửi key tới service rồi chuyển qua stdin cho tiến trình Python. Code hiện tại không chủ động ghi key vào SQLite, log hoặc code export; `localStorage` không phải kho bí mật bảo mật cao.
-- SQLite, WAL, PID, backup và Windows Service runtime/log được ignore khỏi Git.
-- Snapshot JSON của ngày hiện tại được ghi lại theo cơ chế atomic khi database khởi tạo và sau mỗi mutation qua lớp database. Backup chứa prompts, versions, test suites, security audits và settings trong SQLite; cấu hình API key ở `localStorage` không nằm trong backup.
-
-## MCP
-
-Endpoint stateless Streamable HTTP: `http://127.0.0.1:8484/mcp`. Tools: `lprompt_evaluate`, `lprompt_list_presets`, `lprompt_get_versions`, `lprompt_commit_version`. `lprompt_evaluate` dùng heuristic cục bộ đơn giản, không gọi Gemini và không tương đương toàn bộ evaluator trên giao diện.
-
-## Trạng thái xác minh hiện tại
-
-- `npm run check`: đạt — lint sạch, 36/36 test đạt, web app và extension production build thành công.
-- `npm audit`: 0 vulnerability tại thời điểm kiểm tra.
-- `py -3 -m pip check`: không có dependency bị hỏng; DSPy 3.4.0 import thành công.
-- REST, SQLite DTO và MCP được kiểm thử integration trên database tạm.
-- PowerShell service scripts và XML sinh ra đã qua parser validation; WinSW download URL/phiên bản/SHA-256 và least-privilege config có test hồi quy. Tiến trình Node thật cũng đã được smoke-test: health `ready`, nhận SIGINT, shutdown graceful, xóa PID và nhả khóa SQLite.
-- Chưa chạy tác vụ Gemini hoặc DSPy end-to-end với API key thật trong test tự động. Các đường Gemini được mock; việc dùng model thật phụ thuộc key, quota, mạng và trạng thái dịch vụ Google.
-- Chưa chạy smoke test tương tác bằng cách load unpacked vào Chrome đăng nhập Gemini; build và TypeScript đã đạt nhưng selector DOM cần được xác nhận thủ công trên giao diện tài khoản thực.
-- Chưa đăng ký service thật trên Windows trong test tự động vì install/uninstall cần UAC và thay đổi Service Control Manager.
-- Vite hiện cảnh báo bundle JavaScript web app khoảng 531 kB sau minify; build vẫn thành công.
+- Không có Gemini API key trong code hoặc runtime configuration.
+- Extension không tự gửi prompt và chỉ đọc phản hồi khi người dùng yêu cầu; riêng thông báo lỗi tạm thời được quan sát để bật cooldown.
+- SQLite, WAL, PID, backup runtime, `dist`, `extension-dist`, `service/windows/runtime`, `node_modules` và `.env` được ignore khỏi Git.
 
 ## License
 
-MIT — xem `LICENSE`.
+Xem [LICENSE](./LICENSE).

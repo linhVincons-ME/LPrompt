@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { GeminiConfig, ExportLanguage } from '../types';
+import type { ExportLanguage } from '../types';
 import { exportPromptCode } from '../services/codeExporter';
 import {
   X,
@@ -17,7 +17,6 @@ interface CodeExportModalProps {
   rawPrompt: string;
   interpolatedPrompt: string;
   hasVariables: boolean;
-  config: GeminiConfig;
 }
 
 export const CodeExportModal: React.FC<CodeExportModalProps> = ({
@@ -25,17 +24,16 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
   onClose,
   rawPrompt,
   interpolatedPrompt,
-  hasVariables,
-  config
+  hasVariables
 }) => {
-  const [selectedLang, setSelectedLang] = useState<ExportLanguage>('python');
+  const [selectedLang, setSelectedLang] = useState<ExportLanguage>('markdown');
   const [useInterpolated, setUseInterpolated] = useState(true);
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
   const promptToExport = hasVariables && !useInterpolated ? rawPrompt : interpolatedPrompt || rawPrompt;
-  const generatedCode = exportPromptCode(promptToExport, selectedLang, config);
+  const generatedCode = exportPromptCode(promptToExport, selectedLang);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedCode);
@@ -44,9 +42,8 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
   };
 
   const languages: { id: ExportLanguage; label: string; icon: React.ReactNode }[] = [
-    { id: 'python', label: 'Python (Google GenAI)', icon: <FileCode className="w-4 h-4 text-yellow-400" /> },
-    { id: 'typescript', label: 'TypeScript / Node.js', icon: <Code2 className="w-4 h-4 text-blue-400" /> },
-    { id: 'curl', label: 'cURL / Shell', icon: <Terminal className="w-4 h-4 text-emerald-400" /> },
+    { id: 'markdown', label: 'Markdown', icon: <FileCode className="w-4 h-4 text-yellow-400" /> },
+    { id: 'text', label: 'Plain text', icon: <Terminal className="w-4 h-4 text-emerald-400" /> },
     { id: 'json', label: 'JSON PromptOps Spec', icon: <FileJson className="w-4 h-4 text-orange-400" /> },
   ];
 
@@ -61,12 +58,12 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Xuất Mã Nguồn (1-Click SDK Export)</h3>
+                <h3 className="text-base font-bold text-white">Xuất Prompt</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300">
-                  v1.1 SDK
+                  LOCAL
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Tự động sinh mã nguồn kết nối trực tiếp vào dự án phần mềm</p>
+              <p className="text-xs text-slate-400">Xuất prompt sạch dưới dạng Markdown, text hoặc JSON</p>
             </div>
           </div>
 
@@ -120,7 +117,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between text-xs">
           <span className="text-slate-400">
-            Thư viện sử dụng: {selectedLang === 'python' ? 'google-genai' : selectedLang === 'typescript' ? '@google/genai' : 'REST API'}
+            Không chứa API key, SDK hoặc endpoint nhà cung cấp
           </span>
 
           <div className="flex items-center gap-2">

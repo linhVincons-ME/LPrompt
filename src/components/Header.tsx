@@ -3,7 +3,6 @@ import type { PromptDomain } from '../types';
 import { Logo } from './Logo';
 import {
   BookOpen,
-  Key,
   Search,
   Image as ImageIcon,
   Film,
@@ -25,7 +24,6 @@ interface HeaderProps {
   onSelectDomain: (domain: PromptDomain) => void;
   activeView: 'evaluator' | 'optimizer';
   onSelectView: (view: 'evaluator' | 'optimizer') => void;
-  onOpenApiKeyModal: () => void;
   onOpenLibraryModal: () => void;
   onOpenPlayground: () => void;
   onOpenCodeExport: () => void;
@@ -44,7 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectDomain,
   activeView,
   onSelectView,
-  onOpenApiKeyModal,
   onOpenLibraryModal,
   onOpenPlayground,
   onOpenCodeExport,
@@ -146,12 +143,12 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* DSPy Few-Shot Synthesizer Button */}
+          {/* Local Few-Shot Builder Button */}
           {onOpenFewShot && (
             <button
               onClick={onOpenFewShot}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-xs font-bold text-purple-300 transition-colors shadow-sm"
-              title="Tự động sinh ví dụ mẫu Few-Shot (DSPy)"
+              title="Tạo và chỉnh sửa ví dụ Few-Shot cục bộ"
             >
               <Target className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Few-Shot</span>
@@ -187,10 +184,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenCodeExport}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
-            title="Xuất mã nguồn Python, TypeScript, cURL"
+            title="Xuất prompt Markdown, text hoặc JSON"
           >
             <Share2 className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden lg:inline">Xuất Code</span>
+            <span className="hidden lg:inline">Xuất Prompt</span>
           </button>
 
           {/* Library Button */}
@@ -205,15 +202,6 @@ export const Header: React.FC<HeaderProps> = ({
                 {savedCount}
               </span>
             )}
-          </button>
-
-          {/* API Key Settings Button */}
-          <button
-            onClick={onOpenApiKeyModal}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors"
-          >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden xl:inline">API Key</span>
           </button>
 
           {/* Service & Database Indicator */}

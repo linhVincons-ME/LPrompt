@@ -9,6 +9,7 @@ import {
   type OutputLanguage,
   type PromptFramework
 } from '../src/services/frameworkCompiler';
+import { recordTransientFailure, type AvailabilityState, type TransientFailure } from './availability';
 
 interface StoredDraft {
   source: string;
@@ -31,12 +32,14 @@ interface GeminiResponse {
   ok: boolean;
   text?: string;
   error?: string;
+  transientFailure?: TransientFailure;
 }
 
 const STORAGE_KEYS = {
   draft: 'lpromptDraft',
   snapshots: 'lpromptSnapshots',
-  lastResponse: 'lpromptLastResponse'
+  lastResponse: 'lpromptLastResponse',
+  availability: 'lpromptAvailability'
 } as const;
 
 const DOMAINS: Array<{ id: PromptDomain; label: string }> = [
@@ -93,9 +96,11 @@ export function ExtensionPanel() {
   const [status, setStatus] = useState('Sẵn sàng. Extension không tự bấm gửi.');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilityState | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
 
   useEffect(() => {
-    void chrome.storage.local.get([STORAGE_KEYS.draft, STORAGE_KEYS.snapshots, STORAGE_KEYS.lastResponse]).then((stored) => {
+    void chrome.storage.local.get([STORAGE_KEYS.draft, STORAGE_KEYS.snapshots, STORAGE_KEYS.lastResponse, STORAGE_KEYS.availability]).then((stored) => {
       const draft = stored[STORAGE_KEYS.draft] as StoredDraft | undefined;
       if (draft) {
         setSource(draft.source ?? '');
@@ -106,8 +111,47 @@ export function ExtensionPanel() {
       }
       setSnapshots((stored[STORAGE_KEYS.snapshots] as Snapshot[] | undefined) ?? []);
       setResponse((stored[STORAGE_KEYS.lastResponse] as string | undefined) ?? '');
+      const savedAvailability = stored[STORAGE_KEYS.availability] as AvailabilityState | undefined;
+      if (savedAvailability?.retryAt && savedAvailability?.failure) setAvailability(savedAvailability);
     }).catch(() => setStatus('Không đọc được dữ liệu cục bộ; bạn vẫn có thể tiếp tục soạn prompt.'));
   }, []);
+
+  useEffect(() => {
+    if (!availability) return;
+    const timer = globalThis.setInterval(() => setClock(Date.now()), 1000);
+    return () => globalThis.clearInterval(timer);
+  }, [availability]);
+
+  useEffect(() => {
+    const listener = (message: unknown) => {
+      const payload = message as { type?: string; failure?: TransientFailure };
+      if (payload.type !== 'LPROMPT_TRANSIENT_FAILURE' || !payload.failure) return;
+      setAvailability((previous) => {
+        const next = recordTransientFailure(previous, payload.failure!);
+        void chrome.storage.local.set({ [STORAGE_KEYS.availability]: next });
+        setStatus('Gemini đang quá tải. Prompt vẫn được giữ nguyên; LPrompt đã bật thời gian chờ an toàn.');
+        return next;
+      });
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
+  const cooldownSeconds = availability ? Math.max(0, Math.ceil((availability.retryAt - clock) / 1000)) : 0;
+
+  const registerFailure = (failure: TransientFailure) => {
+    setAvailability((previous) => {
+      const next = recordTransientFailure(previous, failure);
+      void chrome.storage.local.set({ [STORAGE_KEYS.availability]: next });
+      return next;
+    });
+    setStatus('Gemini đang quá tải. Prompt vẫn được giữ nguyên; hãy chờ trước khi thử lại.');
+  };
+
+  const clearFailure = () => {
+    setAvailability(null);
+    void chrome.storage.local.remove(STORAGE_KEYS.availability);
+  };
 
   const visiblePrompt = compiled?.prompt ?? '';
   const evaluation = useMemo(
@@ -142,6 +186,10 @@ export function ExtensionPanel() {
   };
 
   const insert = async () => {
+    if (cooldownSeconds > 0) {
+      setStatus(`Đang trong thời gian chờ an toàn. Có thể thử lại sau ${cooldownSeconds} giây.`);
+      return;
+    }
     const result = compiled ?? compile();
     if (!result) return;
     setBusy(true);
@@ -160,6 +208,10 @@ export function ExtensionPanel() {
     setBusy(true);
     try {
       const reply = await sendToGemini({ type: 'LPROMPT_IMPORT_RESPONSE' });
+      if (reply.transientFailure) {
+        registerFailure(reply.transientFailure);
+        return;
+      }
       if (!reply.ok || !reply.text) throw new Error(reply.error || 'Không có phản hồi để nhập.');
       setResponse(reply.text);
       await withTimeout(
@@ -168,6 +220,7 @@ export function ExtensionPanel() {
         'Đã nhập phản hồi nhưng lưu cục bộ bị timeout.'
       );
       setStatus('Đã nhập phản hồi Gemini theo yêu cầu của bạn.');
+      clearFailure();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Không thể nhập phản hồi Gemini.');
     } finally {
@@ -230,6 +283,19 @@ export function ExtensionPanel() {
         </div>
       </header>
 
+      {availability && (
+        <section role="alert" className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2 text-[11px] text-amber-100">
+          <div className="font-bold">Gemini đang tạm thời quá tải</div>
+          <p className="leading-relaxed">LPrompt đã giữ nguyên prompt và không tự gửi lại. Lần phát hiện liên tiếp: {availability.consecutiveFailures}.</p>
+          <div className="flex items-center justify-between gap-2">
+            <span>{cooldownSeconds > 0 ? `Thử lại sau ${cooldownSeconds} giây` : 'Đã có thể chèn lại prompt thủ công'}</span>
+            <button type="button" disabled={busy || cooldownSeconds > 0} onClick={() => void insert()} className="rounded-lg bg-amber-500 px-2.5 py-1.5 font-bold text-slate-950 disabled:opacity-50">
+              {cooldownSeconds > 0 ? 'Đang chờ' : 'Chèn lại'}
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <label className="text-[11px] text-slate-400">Domain
@@ -278,7 +344,7 @@ export function ExtensionPanel() {
           <textarea readOnly value={compiled.prompt} className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200" />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => void copyPrompt()} className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs hover:bg-slate-800">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Đã chép' : 'Sao chép'}</button>
-            <button type="button" disabled={busy} onClick={() => void insert()} className="flex items-center justify-center gap-1 rounded-lg bg-violet-600 py-2 text-xs font-bold hover:bg-violet-500 disabled:opacity-50"><Send className="h-3.5 w-3.5" />Chèn vào Gemini</button>
+            <button type="button" disabled={busy || cooldownSeconds > 0} onClick={() => void insert()} className="flex items-center justify-center gap-1 rounded-lg bg-violet-600 py-2 text-xs font-bold hover:bg-violet-500 disabled:opacity-50"><Send className="h-3.5 w-3.5" />{cooldownSeconds > 0 ? `Chờ ${cooldownSeconds}s` : 'Chèn vào Gemini'}</button>
           </div>
         </section>
       )}

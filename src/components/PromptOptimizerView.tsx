@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { PromptDomain, GeminiConfig } from '../types';
-import { createLocalOptimizationResult, optimizePromptWithGeminiPro, type OptimizationResult } from '../services/optimizer';
+import type { PromptDomain } from '../types';
+import { createLocalOptimizationResult, optimizePromptLocally, type OptimizationResult } from '../services/optimizer';
 import { compilePromptFramework, FRAMEWORK_OPTIONS, type OutputLanguage, type PromptFramework } from '../services/frameworkCompiler';
 import {
   Sparkles,
@@ -24,9 +24,7 @@ import {
 interface PromptOptimizerViewProps {
   currentPrompt: string;
   domain: PromptDomain;
-  config: GeminiConfig;
   onApplyImproved: (newPrompt: string) => void;
-  onOpenApiKeyModal: () => void;
   onOpenPlayground: (prompt: string) => void;
   onOpenCodeExport: (prompt: string) => void;
   onOpenVisualDiff?: (original: string, modified: string) => void;
@@ -37,9 +35,7 @@ interface PromptOptimizerViewProps {
 export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   currentPrompt,
   domain,
-  config,
   onApplyImproved,
-  onOpenApiKeyModal,
   onOpenPlayground,
   onOpenCodeExport,
   onOpenVisualDiff,
@@ -77,18 +73,17 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
     setErrorMessage(null);
 
     try {
-      const res = await optimizePromptWithGeminiPro(
+      const res = await optimizePromptLocally(
         inputPrompt,
         domain,
         getGoalInstruction(outputLanguage),
         selectedFramework,
         instructionOverride,
-        outputLanguage,
-        config
+        outputLanguage
       );
       setOptimizationResult(res);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Không thể biên dịch hoặc review prompt.');
+      setErrorMessage(err.message || 'Không thể biên dịch prompt cục bộ.');
     } finally {
       setIsOptimizing(false);
     }
@@ -135,25 +130,14 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-300 m-0">
-              Biên dịch prompt cục bộ theo framework thực; API Gemini chỉ là bước review tùy chọn
+              Biên dịch hoàn toàn cục bộ; không API key, không chi phí và không phụ thuộc trạng thái dịch vụ AI
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400">Reviewer tùy chọn:</span>
-          <span className="font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-indigo-300">
-            {config.model}
-          </span>
-          {!config.apiKey && (
-            <button
-              onClick={onOpenApiKeyModal}
-              className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors"
-            >
-              Bật API reviewer (tùy chọn)
-            </button>
-          )}
-        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+          Local compiler sẵn sàng
+        </span>
       </div>
 
       {/* Control Panel: Goal & Framework Selection */}
@@ -285,7 +269,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               {isOptimizing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Đang Biên Dịch / Review...</span>
+                  <span>Đang Biên Dịch...</span>
                 </>
               ) : (
                 <>
@@ -405,7 +389,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               <Sparkles className="w-8 h-8 text-slate-600" />
               <div className="text-xs font-semibold text-slate-400">Chưa có bản tối ưu</div>
               <p className="text-[11px] max-w-xs">
-                Nhập nội dung vào khung bên trái và bấm <span className="text-indigo-400 font-semibold">"Đưa Sang Gemini Tối Ưu Hóa"</span> để nhận bản đề xuất và tự kiểm thử lại trước khi dùng.
+                Nhập nội dung vào khung bên trái và bấm <span className="text-indigo-400 font-semibold">"Biên dịch prompt"</span>. Sau đó dùng extension để chèn bản đã kiểm tra vào Gemini Web.
               </p>
             </div>
           )}

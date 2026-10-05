@@ -1,4 +1,4 @@
-import type { SavedPrompt, PromptVersion, FewShotExample, GeminiConfig } from '../types';
+import type { SavedPrompt, PromptVersion } from '../types';
 
 function getApiBase(): string {
   const configured = import.meta.env.VITE_LPROMPT_API_BASE?.trim();
@@ -6,7 +6,6 @@ function getApiBase(): string {
   if (typeof window !== 'undefined' && window.location.port === '8484') return '';
   return 'http://127.0.0.1:8484';
 }
-
 const API_BASE = getApiBase();
 
 async function apiFetch(path: string, init: RequestInit = {}, timeoutMs = 3000): Promise<Response> {
@@ -99,7 +98,6 @@ export async function saveServerPrompt(prompt: SavedPrompt): Promise<boolean> {
     return false;
   }
 }
-
 /**
  * Delete prompt from embedded SQLite service
  */
@@ -158,15 +156,4 @@ export async function deleteServerVersion(id: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export async function optimizeWithDspy(prompt: string, examples: FewShotExample[], config: GeminiConfig): Promise<FewShotExample[]> {
-  const res = await apiFetch('/api/dspy/optimize', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, examples, apiKey: config.apiKey, model: config.model })
-  }, 95_000);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'DSPy optimization thất bại.');
-  if (!Array.isArray(body.examples)) throw new Error('DSPy không trả về danh sách ví dụ hợp lệ.');
-  return body.examples.map((item: Partial<FewShotExample>, index: number) => ({ id: `dspy-${Date.now()}-${index}`, input: String(item.input || ''), output: String(item.output || ''), explanation: item.explanation }));
 }

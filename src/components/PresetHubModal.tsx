@@ -206,7 +206,7 @@ export const PresetHubModal: React.FC<PresetHubModalProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-white">{activePreset.title}</h3>
                   <span className="text-[11px] text-teal-400 font-mono">
-                    Khung: {activePreset.framework} • Khuyên dùng: {activePreset.recommendedModel || 'Gemini 2.0 Flash'}
+                    Khung: {activePreset.framework} • Dùng được với Gemini Web qua extension
                   </span>
                 </div>
                 <button

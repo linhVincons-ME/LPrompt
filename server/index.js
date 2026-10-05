@@ -7,7 +7,6 @@ import * as z from 'zod/v4';
 import { initDatabase, getAllPrompts, savePrompt, deletePrompt, getAllVersions, saveVersion, deleteVersion, exportFullBackup, closeDatabase, DB_FILE, DATA_DIR } from './db.js';
 import { FABRIC_PRESETS } from './presetsData.js';
 import { handleMcpRequest } from './mcpServer.js';
-import { cancelActiveDspyProcesses, getActiveDspyProcessCount, runDspyOptimizer } from './dspyRunner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
@@ -23,11 +22,6 @@ const versionSchema = z.object({
   createdAt: z.string().datetime().optional(), branchName: z.string().min(1).max(100).optional(), parentId: z.string().max(200).optional(),
   mergeParentId: z.string().max(200).optional(), contentHash: z.string().max(128).optional(), promptId: z.string().max(200).optional()
 });
-const dspySchema = z.object({
-  prompt: z.string().min(1).max(100_000), apiKey: z.string().min(10).max(500), model: z.string().min(1).max(100),
-  examples: z.array(z.object({ input: z.string().min(1).max(50_000), output: z.string().min(1).max(100_000) })).min(2).max(20)
-});
-
 function httpError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -67,7 +61,7 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
     if (req.method === 'OPTIONS') res.sendStatus(204); else next();
   });
 
-  app.get('/health', (req, res) => res.json({ status: serviceState.lifecycle === 'ready' ? 'ok' : serviceState.lifecycle, lifecycle: serviceState.lifecycle, service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), activeDspyProcesses: getActiveDspyProcessCount(), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
+  app.get('/health', (req, res) => res.json({ status: serviceState.lifecycle === 'ready' ? 'ok' : serviceState.lifecycle, lifecycle: serviceState.lifecycle, service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
   app.get('/api/prompts', (_req, res) => res.json({ success: true, data: getAllPrompts() }));
   app.post('/api/prompts', (req, res) => res.status(201).json({ success: true, data: savePrompt(promptSchema.parse(req.body)) }));
   app.delete('/api/prompts/:id', (req, res) => res.json(deletePrompt(req.params.id)));
@@ -84,9 +78,6 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
     res.json({ success: true, count: data.length, data });
   });
   app.post('/api/backup', (_req, res) => res.json(exportFullBackup()));
-  app.post('/api/dspy/optimize', async (req, res, next) => {
-    try { res.json(await runDspyOptimizer(dspySchema.parse(req.body))); } catch (error) { next(error); }
-  });
   app.post('/mcp', (req, res, next) => handleMcpRequest(req, res).catch(next));
   app.get('/mcp', (_req, res) => res.status(405).set('Allow', 'POST').send('Method Not Allowed'));
   if (fs.existsSync(DIST_DIR)) {
@@ -144,12 +135,11 @@ export async function startServer({ host = process.env.LPROMPT_HOST || '127.0.0.
         });
         server.closeIdleConnections?.();
       });
-      const cancelledDspy = await cancelActiveDspyProcesses('DSPy đã bị hủy vì LPrompt service đang dừng.');
       await httpClosed;
       closeDatabase();
       cleanup();
-      console.log(`[LPrompt] Service stopped${forced ? ' after forcing remaining HTTP connections closed' : ' gracefully'}; cancelled DSPy processes: ${cancelledDspy}.`);
-      return { forced, cancelledDspy };
+      console.log(`[LPrompt] Service stopped${forced ? ' after forcing remaining HTTP connections closed' : ' gracefully'}.`);
+      return { forced };
     })();
     return closePromise;
   };

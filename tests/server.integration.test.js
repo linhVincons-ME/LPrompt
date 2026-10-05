@@ -25,7 +25,8 @@ describe('local service and MCP integration', () => {
 
   it('serves health and rejects invalid payloads', async () => {
     const health = await fetch(`http://127.0.0.1:${service.port}/health`).then((res) => res.json());
-    expect(health).toMatchObject({ status: 'ok', lifecycle: 'ready', activeDspyProcesses: 0, version: '3.0.0' });
+    expect(health).toMatchObject({ status: 'ok', lifecycle: 'ready', version: '3.0.0' });
+    expect(health).not.toHaveProperty('activeDspyProcesses');
     const invalid = await fetch(`http://127.0.0.1:${service.port}/api/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     expect(invalid.status).toBe(400);
     const blockedOrigin = await fetch(`http://127.0.0.1:${service.port}/health`, { headers: { Origin: 'https://attacker.example' } });

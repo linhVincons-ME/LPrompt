@@ -20,4 +20,9 @@ describe('extension safety contract', () => {
     expect(contentScript).not.toMatch(/requestSubmit|\.submit\s*\(/);
     expect(manifest.side_panel.default_path).toBe('extension/sidepanel.html');
   });
+
+  it('keeps the content script self-contained for classic MV3 injection', () => {
+    expect(contentScript).not.toMatch(/^import\s/m);
+    expect(contentScript).toContain('classifyTransientFailure');
+  });
 });
