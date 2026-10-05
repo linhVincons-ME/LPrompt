@@ -6,6 +6,7 @@ import {
   compilePromptFramework,
   FRAMEWORK_OPTIONS,
   type FrameworkCompileResult,
+  type OutputLanguage,
   type PromptFramework
 } from '../src/services/frameworkCompiler';
 
@@ -14,12 +15,14 @@ interface StoredDraft {
   framework: PromptFramework;
   domain: PromptDomain;
   additionalInstruction: string;
+  outputLanguage: OutputLanguage;
 }
 
 interface Snapshot {
   id: string;
   createdAt: string;
   framework: string;
+  outputLanguage?: OutputLanguage;
   prompt: string;
   response?: string;
 }
@@ -83,6 +86,7 @@ export function ExtensionPanel() {
   const [framework, setFramework] = useState<PromptFramework>('AUTO');
   const [domain, setDomain] = useState<PromptDomain>('research');
   const [additionalInstruction, setAdditionalInstruction] = useState('');
+  const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>('vi');
   const [compiled, setCompiled] = useState<FrameworkCompileResult | null>(null);
   const [response, setResponse] = useState('');
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -98,6 +102,7 @@ export function ExtensionPanel() {
         setFramework(draft.framework ?? 'AUTO');
         setDomain(draft.domain ?? 'research');
         setAdditionalInstruction(draft.additionalInstruction ?? '');
+        setOutputLanguage(draft.outputLanguage ?? 'vi');
       }
       setSnapshots((stored[STORAGE_KEYS.snapshots] as Snapshot[] | undefined) ?? []);
       setResponse((stored[STORAGE_KEYS.lastResponse] as string | undefined) ?? '');
@@ -111,23 +116,29 @@ export function ExtensionPanel() {
   );
 
   const saveDraft = (patch: Partial<StoredDraft>) => {
-    const draft = { source, framework, domain, additionalInstruction, ...patch };
+    const draft = { source, framework, domain, additionalInstruction, outputLanguage, ...patch };
     void chrome.storage.local.set({ [STORAGE_KEYS.draft]: draft }).catch(() => {
       setStatus('Không lưu được draft cục bộ; nội dung hiện tại vẫn còn trong panel.');
     });
   };
 
-  const compile = (): FrameworkCompileResult | null => {
+  const compile = (language: OutputLanguage = outputLanguage): FrameworkCompileResult | null => {
     try {
-      const result = compilePromptFramework(source, framework, { domain, additionalInstruction });
+      const result = compilePromptFramework(source, framework, { domain, additionalInstruction, outputLanguage: language });
       setCompiled(result);
-      saveDraft({});
+      saveDraft({ outputLanguage: language });
       setStatus(`Đã biên dịch bằng ${result.framework}. Hãy kiểm tra trước khi chèn.`);
       return result;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Không thể biên dịch prompt.');
       return null;
     }
+  };
+
+  const changeOutputLanguage = (language: OutputLanguage) => {
+    setOutputLanguage(language);
+    saveDraft({ outputLanguage: language });
+    if (compiled) compile(language);
   };
 
   const insert = async () => {
@@ -171,6 +182,7 @@ export function ExtensionPanel() {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       framework: result.framework,
+      outputLanguage: result.outputLanguage,
       prompt: result.prompt,
       response: response || undefined
     }, ...snapshots].slice(0, 10);
@@ -238,14 +250,29 @@ export function ExtensionPanel() {
         <label className="block text-[11px] text-slate-400">Chỉ thị bổ sung (tuỳ chọn)
           <input value={additionalInstruction} onChange={(event) => { setAdditionalInstruction(event.target.value); setCompiled(null); saveDraft({ additionalInstruction: event.target.value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-indigo-500" placeholder="Ví dụ: trả lời bằng tiếng Việt, dưới 500 từ" />
         </label>
-        <button type="button" onClick={compile} className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold hover:bg-indigo-500">Biên dịch prompt cục bộ</button>
+        <button type="button" onClick={() => compile()} className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold hover:bg-indigo-500">Biên dịch prompt cục bộ</button>
       </section>
 
       {compiled && (
         <section className="rounded-2xl border border-violet-500/30 bg-slate-900 p-3 space-y-2">
-          <div className="flex items-center justify-between text-[11px]">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
             <span className="font-bold text-violet-300">{compiled.framework}</span>
-            <span className="font-mono text-emerald-300">Heuristic {evaluation.total_score}/100</span>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5" aria-label="Ngôn ngữ prompt đầu ra">
+                {([['vi', 'VIE'], ['en', 'ENG']] as const).map(([language, label]) => (
+                  <button
+                    key={language}
+                    type="button"
+                    onClick={() => changeOutputLanguage(language)}
+                    className={`rounded-md px-2 py-1 text-[10px] font-bold ${outputLanguage === language ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    aria-pressed={outputLanguage === language}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="font-mono text-emerald-300">{evaluation.total_score}/100</span>
+            </div>
           </div>
           <p className="text-[11px] text-slate-400">{compiled.reason}</p>
           <textarea readOnly value={compiled.prompt} className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200" />

@@ -2,7 +2,7 @@ import type { PromptDomain, GeminiConfig } from '../types';
 import { z } from 'zod';
 import { generateGeminiContent, parseGeminiJson } from './geminiClient';
 import { evaluatePromptLocally } from './evaluator';
-import { compilePromptFramework, type PromptFramework } from './frameworkCompiler';
+import { compilePromptFramework, type OutputLanguage, type PromptFramework } from './frameworkCompiler';
 
 const optimizationSchema = z.object({
   improved_prompt: z.string().min(1),
@@ -31,13 +31,14 @@ export async function optimizePromptWithGeminiPro(
   goal: string,
   framework: PromptFramework,
   customInstruction: string,
+  outputLanguage: OutputLanguage,
   config: GeminiConfig
 ): Promise<OptimizationResult> {
   const p = prompt.trim();
   if (!p) {
     throw new Error('Vui lòng nhập nội dung prompt cần tối ưu.');
   }
-  const compiled = compilePromptFramework(p, framework, { domain, goal, additionalInstruction: customInstruction });
+  const compiled = compilePromptFramework(p, framework, { domain, goal, additionalInstruction: customInstruction, outputLanguage });
   const originalScore = evaluatePromptLocally(p, domain).total_score;
 
   // Nếu người dùng có API Key Gemini
@@ -46,6 +47,7 @@ export async function optimizePromptWithGeminiPro(
 Bạn là Master Prompt Engineer và Chuyên gia Tối Ưu Hóa Ngữ Nghĩa Cấp Cao cho hệ thống LLM / Multimodal AI.
 Nhiệm vụ của bạn là nhận Prompt gốc từ người dùng thuộc lĩnh vực: "${domain.toUpperCase()}".
 Hãy review và tinh chỉnh prompt đã được compiler cục bộ cấu trúc. Không được tự tuyên bố chất lượng tuyệt đối.
+Toàn bộ cấu trúc, nhãn và chỉ dẫn do bạn sinh thêm phải dùng ${outputLanguage === 'vi' ? 'tiếng Việt' : 'tiếng Anh'}. Giữ nguyên văn nội dung trong thẻ yêu cầu của người dùng và chỉ thị bổ sung; không dịch các phần do người dùng nhập.
 
 MỤC TIÊU TỐI ƯU CỤ THỂ:
 - Hướng mục tiêu: "${goal}"
@@ -91,13 +93,13 @@ BẮT BUỘC TRẢ VỀ JSON theo schema sau:
   }
 
   // Compiler cục bộ là đường chạy mặc định khi không có API key.
-  return simulateGeminiProOptimization(p, domain, compiled);
+  return createLocalOptimizationResult(p, domain, compiled);
 }
 
 /**
  * Kết quả compiler cục bộ; tên hàm được giữ để tương thích với call site cũ.
  */
-function simulateGeminiProOptimization(
+export function createLocalOptimizationResult(
   prompt: string,
   domain: PromptDomain,
   compiled: ReturnType<typeof compilePromptFramework>

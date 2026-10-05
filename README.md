@@ -6,6 +6,7 @@
 
 - Chrome Extension Manifest V3 dùng Side Panel, chỉ có quyền trên `https://gemini.google.com/*`, không lấy cookie và không tự bấm gửi.
 - Compiler cục bộ triển khai thực sự `RTF`, `CO-STAR`, `CRISPE`, `LPrompt Pro` và chế độ `Auto`; không còn nút framework chỉ đổi tên nhưng dùng chung logic.
+- Prompt sau biên dịch có công tắc `VIE`/`ENG`, mặc định `VIE`; đổi qua lại tức thì và không gọi API. Cấu trúc do compiler sinh được chuyển hoàn toàn theo ngôn ngữ đã chọn, còn yêu cầu/chỉ thị người dùng nhập được giữ nguyên văn.
 - Gemini API là tùy chọn qua một client chung có timeout, hủy request, validation response và ước tính chi phí.
 - Model mặc định `gemini-3.8-flash`; có `gemini-3.5-flash-lite` và `gemini-3.1-pro-preview`. Giá trong `src/services/modelCatalog.ts` là giá Standard tham chiếu tại thời điểm cập nhật và chỉ dùng để ước tính.
 - Export Python, TypeScript, cURL và JSON luôn dùng placeholder/biến môi trường, không nhúng API key thật.
@@ -78,7 +79,7 @@ npm run build:extension
 npm run check
 ```
 
-Test suite hiện có 10 file và 34 test case, gồm compiler cho bốn framework và Auto, contract an toàn của extension, Windows Service package, graceful DSPy cancellation, template interpolation, evaluator cho 5 domain, version graph/merge, secret-safe export, Gemini abort/schema errors, OWASP static/dynamic, REST/SQLite và MCP integration.
+Test suite hiện có 10 file và 36 test case, gồm compiler song ngữ cho bốn framework và Auto, chuyển đổi VIE/ENG thuận nghịch, contract an toàn của extension, Windows Service package, graceful DSPy cancellation, template interpolation, evaluator cho 5 domain, version graph/merge, secret-safe export, Gemini abort/schema errors, OWASP static/dynamic, REST/SQLite và MCP integration.
 
 ## API local
 
@@ -106,7 +107,7 @@ Endpoint stateless Streamable HTTP: `http://127.0.0.1:8484/mcp`. Tools: `lprompt
 
 ## Trạng thái xác minh hiện tại
 
-- `npm run check`: đạt — lint sạch, 34/34 test đạt, web app và extension production build thành công.
+- `npm run check`: đạt — lint sạch, 36/36 test đạt, web app và extension production build thành công.
 - `npm audit`: 0 vulnerability tại thời điểm kiểm tra.
 - `py -3 -m pip check`: không có dependency bị hỏng; DSPy 3.4.0 import thành công.
 - REST, SQLite DTO và MCP được kiểm thử integration trên database tạm.

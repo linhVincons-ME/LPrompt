@@ -40,6 +40,8 @@ Quy trình sử dụng:
 
 `Auto` chọn khung theo domain, từ khóa và độ dài. Bốn framework tạo cấu trúc khác nhau; `LPrompt Pro` là khung riêng của dự án cho tác vụ production, không được mô tả như một tiêu chuẩn ngành. Dữ liệu extension được lưu cục bộ bằng `chrome.storage.local`, tối đa 10 snapshot. Extension chỉ khai báo host permission cho `gemini.google.com`, không đọc cookie, không tự gửi prompt và không đọc phản hồi cho tới khi người dùng bấm nút.
 
+Sau khi biên dịch, dùng công tắc `VIE`/`ENG` trên vùng kết quả để đổi ngôn ngữ tức thì; mặc định là `VIE`. Việc chuyển đổi chạy cục bộ, không gọi API. Nhãn, cấu trúc, hướng dẫn và rào chắn do compiler sinh sẽ dùng hoàn toàn ngôn ngữ đã chọn. Nội dung yêu cầu gốc và chỉ thị bổ sung do người dùng nhập luôn được giữ nguyên văn, không tự dịch.
+
 Nếu Gemini thay đổi DOM, extension sẽ báo không tìm thấy ô nhập/phản hồi. Hãy reload tab sau khi cài hoặc cập nhật extension; nếu vẫn lỗi thì selector trong `extension/contentScript.ts` cần được cập nhật.
 
 ## 3. Khởi động web app và service tùy chọn
@@ -158,6 +160,8 @@ Chọn một trong năm domain: research, image, video, code hoặc audio. Nút 
 ### Framework Compiler
 
 Tab `Biên Dịch Prompt` luôn chạy compiler cục bộ trước. Không có API key, kết quả chính là prompt do framework compiler tạo ra. Có API key, model đang chọn chỉ review tiếp bản đã compile. Điểm cũ/mới đều do evaluator cục bộ tính lại, không tin điểm tự khai báo của model. Kết quả vẫn cần được review, chạy Playground và Batch Test trước khi dùng.
+
+Vùng `Prompt Đã Biên Dịch` có công tắc `VIE`/`ENG`, mặc định `VIE`. Nếu đã có kết quả, đổi ngôn ngữ sẽ biên dịch lại ngay tại máy và không gọi API reviewer lần nữa, tránh phát sinh chi phí. Chỉnh sửa prompt nguồn, mục tiêu, framework hoặc chỉ thị bổ sung sẽ xóa kết quả cũ để tránh dùng nhầm output không còn đồng bộ.
 
 ## 7. Template và Playground
 
@@ -300,7 +304,7 @@ npm run check
 Trạng thái kiểm tra gần nhất:
 
 - lint sạch;
-- 10 test file, 34/34 test case đạt;
+- 10 test file, 36/36 test case đạt;
 - web app production build và extension production build đạt;
 - manifest trỏ đúng tới side panel/service worker/content script sau build;
 - PowerShell service scripts/XML qua parser validation; package WinSW, shutdown và DSPy cancellation có test hồi quy; tiến trình Node thật đã được smoke-test health, SIGINT, PID cleanup và SQLite unlock;

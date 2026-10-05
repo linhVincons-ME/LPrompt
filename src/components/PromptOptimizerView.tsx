@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { PromptDomain, GeminiConfig } from '../types';
-import { optimizePromptWithGeminiPro, type OptimizationResult } from '../services/optimizer';
-import { FRAMEWORK_OPTIONS, type PromptFramework } from '../services/frameworkCompiler';
+import { createLocalOptimizationResult, optimizePromptWithGeminiPro, type OptimizationResult } from '../services/optimizer';
+import { compilePromptFramework, FRAMEWORK_OPTIONS, type OutputLanguage, type PromptFramework } from '../services/frameworkCompiler';
 import {
   Sparkles,
   ArrowRight,
@@ -49,6 +49,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
   const [selectedGoal, setSelectedGoal] = useState('production_ready');
   const [selectedFramework, setSelectedFramework] = useState<PromptFramework>('AUTO');
+  const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>('vi');
   const [customInstruction, setCustomInstruction] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
@@ -56,12 +57,15 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   const [copied, setCopied] = useState(false);
 
   const goals = [
-    { id: 'production_ready', label: 'Sẵn sàng Production', desc: 'Rõ input, constraints, output và fallback', instruction: 'Tạo prompt có contract rõ ràng, kiểm tra được và xử lý an toàn khi thiếu dữ liệu.' },
-    { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi', desc: 'Giảm ảo giác và suy diễn ngoài dữ liệu', instruction: 'Ưu tiên guardrails, chỉ rõ dữ liệu không đủ và không tự bịa thông tin.' },
-    { id: 'strict_json', label: 'Ép Schema Đầu Ra', desc: 'Định dạng JSON hoặc bảng máy đọc được', instruction: 'Định nghĩa output schema chặt chẽ và yêu cầu tuân thủ đúng kiểu dữ liệu.' },
-    { id: 'verifiable_reasoning', label: 'Lập Luận Có Thể Kiểm Tra', desc: 'Kết luận, giả định và bằng chứng ngắn gọn', instruction: 'Trả kết luận cùng giả định và căn cứ có thể kiểm tra; không yêu cầu chain-of-thought riêng tư.' },
-    { id: 'multimodal_specs', label: 'Thông Số Chuyên Ngành', desc: 'Ánh sáng, camera, render hoặc code stack', instruction: 'Bổ sung thông số kỹ thuật đặc thù domain khi chúng thực sự liên quan.' },
+    { id: 'production_ready', label: 'Sẵn sàng Production', desc: 'Rõ input, constraints, output và fallback', instruction: { vi: 'Tạo prompt có hợp đồng rõ ràng, kiểm tra được và xử lý an toàn khi thiếu dữ liệu.', en: 'Create a prompt with a clear, testable contract and safe behavior when required data is missing.' } },
+    { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi', desc: 'Giảm ảo giác và suy diễn ngoài dữ liệu', instruction: { vi: 'Ưu tiên rào chắn, chỉ rõ dữ liệu không đủ và không tự bịa thông tin.', en: 'Prioritize guardrails, identify insufficient data, and never fabricate information.' } },
+    { id: 'strict_json', label: 'Ép Schema Đầu Ra', desc: 'Định dạng JSON hoặc bảng máy đọc được', instruction: { vi: 'Định nghĩa schema đầu ra chặt chẽ và yêu cầu tuân thủ đúng kiểu dữ liệu.', en: 'Define a strict output schema and require exact data-type compliance.' } },
+    { id: 'verifiable_reasoning', label: 'Lập Luận Có Thể Kiểm Tra', desc: 'Kết luận, giả định và bằng chứng ngắn gọn', instruction: { vi: 'Trả về kết luận cùng giả định và căn cứ có thể kiểm tra; không yêu cầu chuỗi suy luận riêng tư.', en: 'Return conclusions with verifiable assumptions and evidence; do not request private chain-of-thought.' } },
+    { id: 'multimodal_specs', label: 'Thông Số Chuyên Ngành', desc: 'Ánh sáng, camera, render hoặc code stack', instruction: { vi: 'Bổ sung thông số kỹ thuật đặc thù lĩnh vực khi chúng thực sự liên quan.', en: 'Add domain-specific technical parameters only when they are materially relevant.' } },
   ];
+
+  const getGoalInstruction = (language: OutputLanguage) =>
+    goals.find((goal) => goal.id === selectedGoal)?.instruction[language] ?? selectedGoal;
 
   const handleOptimize = async (instructionOverride = customInstruction) => {
     if (!inputPrompt.trim()) {
@@ -76,9 +80,10 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
       const res = await optimizePromptWithGeminiPro(
         inputPrompt,
         domain,
-        goals.find((goal) => goal.id === selectedGoal)?.instruction ?? selectedGoal,
+        getGoalInstruction(outputLanguage),
         selectedFramework,
         instructionOverride,
+        outputLanguage,
         config
       );
       setOptimizationResult(res);
@@ -86,6 +91,23 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
       setErrorMessage(err.message || 'Không thể biên dịch hoặc review prompt.');
     } finally {
       setIsOptimizing(false);
+    }
+  };
+
+  const handleOutputLanguageChange = (language: OutputLanguage) => {
+    setOutputLanguage(language);
+    if (!optimizationResult || !inputPrompt.trim()) return;
+    try {
+      const compiled = compilePromptFramework(inputPrompt, selectedFramework, {
+        domain,
+        goal: getGoalInstruction(language),
+        additionalInstruction: customInstruction,
+        outputLanguage: language
+      });
+      setOptimizationResult(createLocalOptimizationResult(inputPrompt, domain, compiled));
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể chuyển ngôn ngữ đầu ra.');
     }
   };
 
@@ -145,7 +167,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
             {goals.map((g) => (
               <button
                 key={g.id}
-                onClick={() => setSelectedGoal(g.id)}
+                onClick={() => { setSelectedGoal(g.id); setOptimizationResult(null); }}
                 className={`p-3 rounded-xl border text-left transition-all ${
                   selectedGoal === g.id
                     ? 'border-indigo-500 bg-indigo-500/15 text-white shadow-md shadow-indigo-600/10'
@@ -168,7 +190,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               {FRAMEWORK_OPTIONS.map((option) => (
                   <button
                     key={option.id}
-                    onClick={() => setSelectedFramework(option.id)}
+                    onClick={() => { setSelectedFramework(option.id); setOptimizationResult(null); }}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all text-center ${
                     selectedFramework === option.id
                       ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/20'
@@ -190,7 +212,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               <input
                 type="text"
                 value={customInstruction}
-                onChange={(e) => setCustomInstruction(e.target.value)}
+                onChange={(e) => { setCustomInstruction(e.target.value); setOptimizationResult(null); }}
                 placeholder="VD: Viết bằng tiếng Anh chuẩn Oxford, thêm ví dụ JSON thực tế, rút gọn dưới 150 từ..."
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
               />
@@ -229,7 +251,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
 
           <textarea
             value={inputPrompt}
-            onChange={(e) => setInputPrompt(e.target.value)}
+            onChange={(e) => { setInputPrompt(e.target.value); setOptimizationResult(null); }}
             placeholder="Nhập prompt thô cần biên dịch theo framework..."
             className="w-full flex-1 min-h-[260px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
           />
@@ -284,12 +306,27 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
                 Prompt Đã Biên Dịch
               </span>
             </div>
-            {optimizationResult && (
-              <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Điểm mới: {optimizationResult.new_score}/100 (Xuất sắc)
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5" aria-label="Ngôn ngữ prompt đầu ra">
+                {([['vi', 'VIE'], ['en', 'ENG']] as const).map(([language, label]) => (
+                  <button
+                    key={language}
+                    type="button"
+                    onClick={() => handleOutputLanguageChange(language)}
+                    className={`rounded-md px-2.5 py-1 text-[10px] font-bold transition-colors ${outputLanguage === language ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    aria-pressed={outputLanguage === language}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {optimizationResult && (
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Điểm mới: {optimizationResult.new_score}/100
+                </span>
+              )}
+            </div>
           </div>
 
           {optimizationResult ? (
