@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title LPrompt Studio - Background Service Console (v2.5)
+title LPrompt Studio - Background Service Console (v3.0)
 
 echo ==============================================================
 echo   Khởi động LPrompt Service trong cửa sổ Console (Debug Mode)

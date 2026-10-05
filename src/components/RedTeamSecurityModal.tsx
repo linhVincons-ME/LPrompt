@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import type { GeminiConfig, RedTeamSecurityReport } from '../types';
 import { scanPromptSecurityWithGemini } from '../services/securityScanner';
 import {
@@ -33,26 +33,36 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [report, setReport] = useState<RedTeamSecurityReport | null>(null);
   const [applied, setApplied] = useState(false);
-
-  useEffect(() => {
-    if (isOpen && prompt.trim()) {
-      handleScan();
-    }
-  }, [isOpen]);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   if (!isOpen) return null;
 
   const handleScan = async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setIsScanning(true);
     setApplied(false);
+    setScanError(null);
     try {
-      const res = await scanPromptSecurityWithGemini(prompt, config);
+      const res = await scanPromptSecurityWithGemini(prompt, config, controller.signal);
       setReport(res);
-    } catch {
-      // Fallback handled in service
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : 'Quét bảo mật thất bại.');
     } finally {
-      setIsScanning(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setIsScanning(false);
+      }
     }
+  };
+
+  const handleClose = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsScanning(false);
+    onClose();
   };
 
   const handleApplyPatch = () => {
@@ -60,7 +70,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
       onApplyPatchedPrompt(report.patchedPrompt);
       setApplied(true);
       setTimeout(() => {
-        onClose();
+        handleClose();
       }, 1200);
     }
   };
@@ -105,7 +115,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
               <RotateCcw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -137,6 +147,7 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
                   ? 'Mức độ rủi ro trung bình, thiếu điều khoản chống rò rỉ prompt hoặc rào chắn ảo giác.'
                   : 'Cảnh báo nguy cơ cao! Prompt dễ bị chiếm quyền điều khiển bằng Prompt Injection.'}
               </p>
+              {report && <p className="text-[11px] text-sky-300 mt-1">Chế độ: {report.mode === 'dynamic' ? `dynamic · pass ${report.dynamicPassRate}%` : 'static (chưa có API key)'}</p>}
             </div>
           </div>
 
@@ -154,6 +165,10 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
 
         {/* Security Check Cards */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {!report && !isScanning && (
+            <button onClick={handleScan} className="w-full py-8 rounded-xl border border-dashed border-rose-500/40 bg-rose-500/5 text-sm font-semibold text-rose-300">Bắt đầu quét OWASP LLM Top 10{config.apiKey ? ' + 6 payload động' : ' (static)'}</button>
+          )}
+          {scanError && <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{scanError}</div>}
           {isScanning ? (
             <div className="py-16 flex flex-col items-center justify-center text-slate-500 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
@@ -205,13 +220,24 @@ export const RedTeamSecurityModal: React.FC<RedTeamSecurityModalProps> = ({
               );
             })
           )}
+          {!isScanning && report?.attackResults && report.attackResults.length > 0 && (
+            <div className="space-y-2 pt-3 border-t border-slate-800">
+              <h4 className="text-xs font-bold text-white">Kết quả payload động ({report.attackResults.length})</h4>
+              {report.attackResults.map((attack) => (
+                <div key={attack.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
+                  <div className="flex justify-between gap-3"><span className="font-mono text-sky-300">{attack.category}/{attack.id}</span><span className={attack.status === 'pass' ? 'text-emerald-400' : attack.status === 'fail' ? 'text-rose-400' : 'text-amber-400'}>{attack.status.toUpperCase()} · {attack.latencyMs}ms</span></div>
+                  <p className="text-slate-400 mt-1">{attack.reason}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
           <span>Tiêu chuẩn bảo mật tham chiếu theo OWASP Top 10 for Large Language Models</span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
           >
             Đóng

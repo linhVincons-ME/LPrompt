@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type {
   PromptDomain,
   PromptEvaluation,
@@ -11,6 +11,9 @@ import type {
 import { evaluatePromptLocally, evaluatePromptWithGemini } from './services/evaluator';
 import { SAMPLE_PROMPTS } from './data/samplePrompts';
 import { extractVariables, interpolateTemplate, getInitialVariableValues } from './utils/template';
+import { stableContentHash } from './utils/hash';
+import { BRANCH_NAME_PATTERN, findCommonAncestor, getBranchHead, mergePromptContents } from './utils/versionGraph';
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from './utils/storage';
 import { Header } from './components/Header';
 import { ScoreGauge } from './components/ScoreGauge';
 import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
@@ -37,6 +40,7 @@ import {
   deleteServerVersion,
   type ServiceHealth
 } from './services/apiClient';
+import { DEFAULT_GEMINI_MODEL } from './services/modelCatalog';
 import {
   Sparkles,
   Zap,
@@ -60,22 +64,24 @@ import {
 
 const DEFAULT_CONFIG: GeminiConfig = {
   apiKey: '',
-  model: 'gemini-2.0-flash',
-  temperature: 0.2
+  model: DEFAULT_GEMINI_MODEL,
+  temperature: 0.2,
+  timeoutMs: 30000
 };
 
 export function App() {
+  const initialSample = SAMPLE_PROMPTS.find((sample) => sample.domain === 'research')?.prompt || '';
   const [currentDomain, setCurrentDomain] = useState<PromptDomain>('research');
   const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer');
-  const [rawPrompt, setRawPrompt] = useState<string>('');
-  const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(null);
+  const [rawPrompt, setRawPrompt] = useState<string>(initialSample);
+  const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(() => initialSample ? evaluatePromptLocally(initialSample, 'research') : null);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
   const [copiedOriginal, setCopiedOriginal] = useState<boolean>(false);
   const [copiedImproved, setCopiedImproved] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
 
   // Dynamic Variables state (v1.1)
-  const [variables, setVariables] = useState<string[]>([]);
+  const variables = useMemo(() => extractVariables(rawPrompt), [rawPrompt]);
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
 
   // Modals
@@ -104,22 +110,59 @@ export function App() {
 
   // Config & Storage
   const [config, setConfig] = useState<GeminiConfig>(() => {
-    const saved = localStorage.getItem('lprompt_gemini_config');
-    return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
+    try {
+      const saved = safeStorageGet('lprompt_gemini_config');
+      const parsed = saved ? JSON.parse(saved) as Partial<GeminiConfig> : {};
+      const retiredModels = new Set(['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash']);
+      return {
+        ...DEFAULT_CONFIG,
+        ...parsed,
+        model: parsed.model && !retiredModels.has(parsed.model) ? parsed.model : DEFAULT_GEMINI_MODEL
+      };
+    } catch {
+      safeStorageRemove('lprompt_gemini_config');
+      return DEFAULT_CONFIG;
+    }
   });
 
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>(() => {
-    const saved = localStorage.getItem('lprompt_saved_prompts');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = safeStorageGet('lprompt_saved_prompts');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      safeStorageRemove('lprompt_saved_prompts');
+      return [];
+    }
   });
 
   const [versions, setVersions] = useState<PromptVersion[]>(() => {
-    const saved = localStorage.getItem('lprompt_versions');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = safeStorageGet('lprompt_versions');
+      const parsed = saved ? JSON.parse(saved) as Array<Partial<PromptVersion>> : [];
+      return parsed.map((version) => ({
+        ...version,
+        id: String(version.id ?? `ver-${crypto.randomUUID()}`),
+        versionNumber: String(version.versionNumber ?? 'legacy'),
+        commitMessage: String(version.commitMessage ?? 'Imported legacy snapshot'),
+        content: String(version.content ?? ''),
+        stage: version.stage ?? 'draft',
+        createdAt: String(version.createdAt ?? new Date(0).toISOString()),
+        branchName: version.branchName ?? 'main',
+        contentHash: version.contentHash || stableContentHash(String(version.content ?? ''))
+      }));
+    } catch {
+      safeStorageRemove('lprompt_versions');
+      return [];
+    }
   });
 
   // v2.5 Service & SQLite Sync
   const [serviceStatus, setServiceStatus] = useState<ServiceHealth | null>(null);
+  const [activeBranch, setActiveBranch] = useState(() => safeStorageGet('lprompt_active_branch') || 'main');
+  const [pendingMergeParentId, setPendingMergeParentId] = useState<string | undefined>();
+  const initialSavedPromptsRef = useRef(savedPrompts);
+  const initialVersionsRef = useRef(versions);
 
   // Sync with background LPrompt Service on mount
   useEffect(() => {
@@ -128,48 +171,50 @@ export function App() {
       if (status.online) {
         // Sync prompts from embedded SQLite
         const serverPrompts = await fetchServerPrompts();
-        if (serverPrompts && serverPrompts.length > 0) {
-          setSavedPrompts(serverPrompts);
-          localStorage.setItem('lprompt_saved_prompts', JSON.stringify(serverPrompts));
+        if (serverPrompts) {
+          const localPrompts = initialSavedPromptsRef.current;
+          const merged = [...serverPrompts];
+          for (const prompt of localPrompts) {
+            if (!merged.some((item) => item.id === prompt.id)) {
+              merged.push(prompt);
+              await saveServerPrompt(prompt);
+            }
+          }
+          setSavedPrompts(merged);
+          safeStorageSet('lprompt_saved_prompts', merged);
         }
         // Sync versions from embedded SQLite
         const serverVersions = await fetchServerVersions();
-        if (serverVersions && serverVersions.length > 0) {
-          setVersions(serverVersions);
-          localStorage.setItem('lprompt_versions', JSON.stringify(serverVersions));
+        if (serverVersions) {
+          const merged = [...serverVersions];
+          for (const version of initialVersionsRef.current) {
+            if (!merged.some((item) => item.id === version.id)) {
+              merged.push(version);
+              await saveServerVersion(version);
+            }
+          }
+          setVersions(merged);
+          safeStorageSet('lprompt_versions', merged);
         }
       }
     });
   }, []);
 
-  // Sync variables whenever rawPrompt changes
-  useEffect(() => {
-    const detected = extractVariables(rawPrompt);
-    setVariables(detected);
-    setVariableValues((prev) => getInitialVariableValues(detected, prev));
-  }, [rawPrompt]);
-
-  // Load initial sample when domain changes if prompt is empty
-  useEffect(() => {
-    const domainSamples = SAMPLE_PROMPTS.filter((s) => s.domain === currentDomain);
-    if (domainSamples.length > 0 && !rawPrompt) {
-      setRawPrompt(domainSamples[0].prompt);
-      const initialEval = evaluatePromptLocally(domainSamples[0].prompt, currentDomain);
-      setEvaluation(initialEval);
-    }
-  }, [currentDomain]);
-
   // Persist config
   const handleSaveConfig = (newConfig: GeminiConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('lprompt_gemini_config', JSON.stringify(newConfig));
+    if (!safeStorageSet('lprompt_gemini_config', newConfig)) setAuditError('Không thể lưu cấu hình vào bộ nhớ trình duyệt.');
   };
 
   // Instant local evaluation (evaluates interpolated if variables exist)
-  const handleLocalEvaluate = (textToEval = rawPrompt) => {
+  const handleLocalEvaluate = (
+    textToEval = rawPrompt,
+    values = variableValues,
+    domain = currentDomain
+  ) => {
     setAuditError(null);
-    const resolved = interpolateTemplate(textToEval, variableValues);
-    const result = evaluatePromptLocally(resolved || textToEval, currentDomain);
+    const resolved = interpolateTemplate(textToEval, values);
+    const result = evaluatePromptLocally(resolved || textToEval, domain);
     setEvaluation(result);
   };
 
@@ -244,37 +289,111 @@ export function App() {
 
     const updated = [newEntry, ...savedPrompts];
     setSavedPrompts(updated);
-    localStorage.setItem('lprompt_saved_prompts', JSON.stringify(updated));
-    saveServerPrompt(newEntry);
-    alert('Đã lưu prompt vào thư viện cá nhân (Đồng bộ SQLite)!');
+    if (!safeStorageSet('lprompt_saved_prompts', updated)) setAuditError('Không thể lưu thư viện vào bộ nhớ trình duyệt.');
+    void saveServerPrompt(newEntry).then((saved) => {
+      if (!saved && serviceStatus?.online) setAuditError('Đã lưu cache trình duyệt nhưng đồng bộ SQLite thất bại.');
+    });
   };
 
   // v1.2 Versioning handlers
   const handleSaveVersions = (updated: PromptVersion[]) => {
     setVersions(updated);
-    localStorage.setItem('lprompt_versions', JSON.stringify(updated));
+    if (!safeStorageSet('lprompt_versions', updated)) setAuditError('Không thể lưu lịch sử phiên bản vào bộ nhớ trình duyệt.');
   };
 
-  const handleCommitVersion = (message: string, stage: VersionStage, promptContent: string) => {
-    const versionNum = `v1.${versions.length}`;
+  const handleCommitVersion = (message: string, stage: VersionStage, promptContent: string, mergeParentId?: string) => {
+    const parent = getBranchHead(versions, activeBranch);
+    const contentHash = stableContentHash(promptContent);
+    const versionNum = `${activeBranch}@${contentHash}`;
     const newVer: PromptVersion = {
-      id: `ver-${Date.now()}`,
+      id: `ver-${crypto.randomUUID()}`,
       versionNumber: versionNum,
       commitMessage: message.trim() || `Cập nhật ${versionNum}`,
       content: promptContent,
       stage: stage,
       score: evaluation?.total_score,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      branchName: activeBranch,
+      parentId: parent?.id,
+      mergeParentId: mergeParentId ?? pendingMergeParentId,
+      contentHash
     };
     const updated = [newVer, ...versions];
     handleSaveVersions(updated);
-    saveServerVersion(newVer);
+    setPendingMergeParentId(undefined);
+    void saveServerVersion(newVer).then((saved) => {
+      if (!saved && serviceStatus?.online) setAuditError('Commit đã lưu trong trình duyệt nhưng chưa đồng bộ được SQLite.');
+    });
+  };
+
+  const handleSwitchBranch = (branchName: string) => {
+    const head = getBranchHead(versions, branchName);
+    setActiveBranch(branchName);
+    safeStorageSet('lprompt_active_branch', branchName);
+    setPendingMergeParentId(undefined);
+    if (head) {
+      setRawPrompt(head.content);
+      handleLocalEvaluate(head.content);
+    }
+  };
+
+  const handleCreateBranch = (branchName: string) => {
+    const normalized = branchName.trim();
+    if (!BRANCH_NAME_PATTERN.test(normalized)) {
+      setAuditError('Tên nhánh không hợp lệ: chỉ dùng chữ, số, dấu . _ / - và tối đa 64 ký tự.');
+      return;
+    }
+    if (versions.some((version) => version.branchName === normalized)) {
+      setAuditError(`Nhánh "${normalized}" đã tồn tại.`);
+      return;
+    }
+    const parent = getBranchHead(versions, activeBranch);
+    const content = rawPrompt || parent?.content || '';
+    if (!content.trim()) {
+      setAuditError('Không thể tạo nhánh từ prompt rỗng.');
+      return;
+    }
+    const contentHash = stableContentHash(content);
+    const branchCommit: PromptVersion = {
+      id: `ver-${crypto.randomUUID()}`, versionNumber: `${normalized}@${contentHash}`, commitMessage: `Tạo nhánh từ ${activeBranch}`,
+      content, stage: parent?.stage || 'draft', score: evaluation?.total_score, createdAt: new Date().toISOString(), branchName: normalized,
+      parentId: parent?.id, contentHash
+    };
+    const updated = [branchCommit, ...versions];
+    handleSaveVersions(updated);
+    setActiveBranch(normalized);
+    safeStorageSet('lprompt_active_branch', normalized);
+    void saveServerVersion(branchCommit);
+  };
+
+  const handleMergeBranch = (sourceBranch: string) => {
+    if (sourceBranch === activeBranch) return;
+    const currentHead = getBranchHead(versions, activeBranch);
+    const sourceHead = getBranchHead(versions, sourceBranch);
+    if (!sourceHead) {
+      setAuditError(`Nhánh "${sourceBranch}" không có commit để merge.`);
+      return;
+    }
+    const ancestor = findCommonAncestor(versions, currentHead?.id, sourceHead.id);
+    const merged = mergePromptContents(ancestor?.content || '', currentHead?.content ?? rawPrompt, sourceHead.content, sourceBranch);
+    setRawPrompt(merged.content);
+    handleLocalEvaluate(merged.content);
+    if (merged.conflicted) {
+      setPendingMergeParentId(sourceHead.id);
+      setAuditError('Merge tạo conflict markers và chưa được commit. Hãy sửa nội dung giữa <<<<<<< và >>>>>>> rồi tạo commit để hoàn tất merge.');
+    } else {
+      handleCommitVersion(`Merge ${sourceBranch} vào ${activeBranch}`, currentHead?.stage || sourceHead.stage, merged.content, sourceHead.id);
+    }
   };
 
   const handleDeleteVersion = (versionId: string) => {
+    if (versions.some((version) => version.parentId === versionId || version.mergeParentId === versionId)) {
+      setAuditError('Không thể xóa commit đang là cha của commit khác. Hãy giữ lại để đồ thị phiên bản không bị đứt.');
+      return;
+    }
     const updated = versions.filter((v) => v.id !== versionId);
     handleSaveVersions(updated);
-    deleteServerVersion(versionId);
+    void deleteServerVersion(versionId);
   };
 
   const handleRollbackVersion = (version: PromptVersion) => {
@@ -329,8 +448,10 @@ export function App() {
         currentDomain={currentDomain}
         onSelectDomain={(d) => {
           setCurrentDomain(d);
-          setRawPrompt('');
-          setEvaluation(null);
+          const sample = SAMPLE_PROMPTS.find((item) => item.domain === d)?.prompt || '';
+          setRawPrompt(sample);
+          setVariableValues(getInitialVariableValues(extractVariables(sample)));
+          setEvaluation(sample ? evaluatePromptLocally(sample, d) : null);
         }}
         activeView={activeView}
         onSelectView={setActiveView}
@@ -465,7 +586,7 @@ export function App() {
                   onChangeValue={(name, val) => {
                     const updated = { ...variableValues, [name]: val };
                     setVariableValues(updated);
-                    handleLocalEvaluate(rawPrompt);
+                    handleLocalEvaluate(rawPrompt, updated);
                   }}
                   onAddVariable={(name) => {
                     const tag = ` {{${name}}}`;
@@ -476,7 +597,7 @@ export function App() {
                     const cleared: Record<string, string> = {};
                     variables.forEach((v) => (cleared[v] = ''));
                     setVariableValues(cleared);
-                    handleLocalEvaluate(rawPrompt);
+                    handleLocalEvaluate(rawPrompt, cleared);
                   }}
                 />
 
@@ -588,7 +709,7 @@ export function App() {
                     <div className="flex items-center gap-2">
                       <FileCheck className="w-4 h-4 text-emerald-400" />
                       <span className="text-xs font-bold text-white uppercase tracking-wider">
-                        Phiên Bản Nâng Cấp Chuẩn Hóa (95 - 100 Điểm)
+                        Phiên Bản Nâng Cấp Được Đề Xuất
                       </span>
                     </div>
 
@@ -612,7 +733,7 @@ export function App() {
                       </button>
 
                       <button
-                        onClick={() => handleOpenVisualDiff(rawPrompt, evaluation.improved_prompt, 'Prompt Hiện Tại', 'Bản Nâng Cấp 100đ')}
+                        onClick={() => handleOpenVisualDiff(rawPrompt, evaluation.improved_prompt, 'Prompt Hiện Tại', 'Bản Nâng Cấp Đề Xuất')}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-950/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-300 hover:text-white text-xs font-medium transition-colors"
                         title="So sánh chi tiết thay đổi (Word-level Diff)"
                       >
@@ -731,12 +852,12 @@ export function App() {
         onSelectPrompt={(p) => {
           setCurrentDomain(p.domain);
           setRawPrompt(p.improved_prompt);
-          handleLocalEvaluate(p.improved_prompt);
+          handleLocalEvaluate(p.improved_prompt, variableValues, p.domain);
         }}
         onDeletePrompt={(id) => {
           const filtered = savedPrompts.filter((x) => x.id !== id);
           setSavedPrompts(filtered);
-          localStorage.setItem('lprompt_saved_prompts', JSON.stringify(filtered));
+          safeStorageSet('lprompt_saved_prompts', filtered);
           deleteServerPrompt(id);
         }}
       />
@@ -775,10 +896,14 @@ export function App() {
         onClose={() => setIsVersionDrawerOpen(false)}
         versions={versions}
         currentPrompt={rawPrompt}
+        activeBranch={activeBranch}
         onCommitNewVersion={(message, stage) => handleCommitVersion(message, stage, rawPrompt)}
         onRollbackToVersion={handleRollbackVersion}
         onCompareWithVersion={handleCompareWithCurrent}
         onDeleteVersion={handleDeleteVersion}
+        onSwitchBranch={handleSwitchBranch}
+        onCreateBranch={handleCreateBranch}
+        onMergeBranch={handleMergeBranch}
       />
 
       <VisualDiffModal
@@ -808,6 +933,7 @@ export function App() {
       />
 
       <BatchEvaluationModal
+        key={batchEvalTargetPrompt}
         isOpen={isBatchEvalOpen}
         onClose={() => setIsBatchEvalOpen(false)}
         promptTemplate={batchEvalTargetPrompt}

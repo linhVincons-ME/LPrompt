@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import type { GeminiConfig, PromptExecutionResult } from '../types';
 import { executePromptWithGemini } from '../services/execution';
 import {
@@ -32,28 +32,27 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
   const [result, setResult] = useState<PromptExecutionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Auto-run when modal opens
-  useEffect(() => {
-    if (isOpen && prompt.trim()) {
-      handleRun();
-    }
-  }, [isOpen]);
+  const abortRef = useRef<AbortController | null>(null);
 
   if (!isOpen) return null;
 
   const handleRun = async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setIsRunning(true);
     setError(null);
     try {
-      const res = await executePromptWithGemini(prompt, config);
+      const res = await executePromptWithGemini(prompt, config, controller.signal);
       setResult(res);
     } catch (err: any) {
       setError(err.message || 'Lỗi khi thực thi prompt.');
     } finally {
-      setIsRunning(false);
+      if (abortRef.current === controller) { abortRef.current = null; setIsRunning(false); }
     }
   };
+
+  const handleClose = () => { abortRef.current?.abort(); abortRef.current = null; setIsRunning(false); onClose(); };
 
   const handleCopy = () => {
     if (!result?.output) return;
@@ -92,7 +91,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
               <span>{isRunning ? 'Đang chạy...' : 'Chạy lại'}</span>
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -194,7 +193,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
           <span>{result?.source === 'simulation' ? '⚡ Đang chạy chế độ mô phỏng Offline (Cấu hình API Key để chạy mô hình thực tế)' : '🟢 Kết nối trực tiếp Google AI Studio API'}</span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
           >
             Đóng

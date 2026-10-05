@@ -1,5 +1,6 @@
 import type { GeminiConfig, TestCase, TestCaseRunResult, BatchEvaluationSummary } from '../types';
 import { interpolateTemplate } from '../utils/template';
+import { generateGeminiContent } from './geminiClient';
 
 /**
  * Generate starter test cases automatically based on detected variables in the prompt
@@ -120,17 +121,15 @@ export async function runBatchEvaluation(
   promptTemplate: string,
   testCases: TestCase[],
   config: GeminiConfig,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<BatchEvaluationSummary> {
   const results: TestCaseRunResult[] = [];
   let totalLatency = 0;
   const isLive = Boolean(config.apiKey && config.apiKey.trim().length > 10);
-  const modelToUse = config.model || 'gemini-2.0-flash';
-  const url = isLive
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${config.apiKey}`
-    : '';
 
   for (let i = 0; i < testCases.length; i++) {
+    if (signal?.aborted) throw new DOMException('Batch evaluation đã bị hủy.', 'AbortError');
     const tc = testCases[i];
     const resolvedPrompt = interpolateTemplate(promptTemplate, tc.variables);
     const startTime = performance.now();
@@ -138,37 +137,19 @@ export async function runBatchEvaluation(
     let tokens = 0;
 
     try {
-      if (isLive && url) {
-        const payload = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: resolvedPrompt }]
-            }
-          ],
-          generationConfig: {
-            temperature: config.temperature ?? 0.2
-          }
-        };
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+      if (isLive) {
+        const generated = await generateGeminiContent(resolvedPrompt, config, {
+          temperature: config.temperature ?? 0.2,
+          signal
         });
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-
-        const data = await res.json();
-        actualOutput = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        tokens =
-          data.usageMetadata?.totalTokenCount ||
-          Math.round((resolvedPrompt.length + actualOutput.length) / 4);
+        actualOutput = generated.text;
+        tokens = generated.usage.totalTokens;
       } else {
         // High-fidelity offline simulation
-        await new Promise((r) => setTimeout(r, 450 + Math.random() * 300));
+        await new Promise<void>((resolve, reject) => {
+          const timeout = globalThis.setTimeout(resolve, 450 + Math.random() * 300);
+          signal?.addEventListener('abort', () => { globalThis.clearTimeout(timeout); reject(new DOMException('Batch evaluation đã bị hủy.', 'AbortError')); }, { once: true });
+        });
         actualOutput = `[Mô phỏng phản hồi cho ${tc.name}]\n\nYêu cầu đã được xử lý với các tham số: ${JSON.stringify(
           tc.variables
         )}.\n\nKết quả đáp ứng đầy đủ tiêu chí định dạng, không suy diễn lan man và cấu trúc rõ ràng.`;
@@ -190,7 +171,9 @@ export async function runBatchEvaluation(
         reason: evalResult.reason
       });
     } catch (err: any) {
+      if (signal?.aborted) throw err;
       const duration = Math.round(performance.now() - startTime);
+      totalLatency += duration;
       results.push({
         testCaseId: tc.id,
         testCaseName: tc.name,

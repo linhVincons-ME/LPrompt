@@ -8,18 +8,25 @@ import {
   RotateCcw,
   CheckCircle,
   Plus,
-  Trash2
+  Trash2,
+  GitBranch,
+  GitMerge
 } from 'lucide-react';
+import { getBranchNames } from '../utils/versionGraph';
 
 interface VersionHistoryDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentPrompt: string;
   versions: PromptVersion[];
+  activeBranch: string;
   onCommitNewVersion: (commitMessage: string, stage: VersionStage) => void;
   onRollbackToVersion: (version: PromptVersion) => void;
   onCompareWithVersion: (version: PromptVersion) => void;
   onDeleteVersion: (versionId: string) => void;
+  onSwitchBranch: (branchName: string) => void;
+  onCreateBranch: (branchName: string) => void;
+  onMergeBranch: (sourceBranch: string) => void;
 }
 
 export const VersionHistoryDrawer: React.FC<VersionHistoryDrawerProps> = ({
@@ -27,14 +34,20 @@ export const VersionHistoryDrawer: React.FC<VersionHistoryDrawerProps> = ({
   onClose,
   currentPrompt,
   versions,
+  activeBranch,
   onCommitNewVersion,
   onRollbackToVersion,
   onCompareWithVersion,
-  onDeleteVersion
+  onDeleteVersion,
+  onSwitchBranch,
+  onCreateBranch,
+  onMergeBranch
 }) => {
   const [commitMessage, setCommitMessage] = useState('');
   const [stage, setStage] = useState<VersionStage>('draft');
   const [isCreating, setIsCreating] = useState(false);
+  const [newBranch, setNewBranch] = useState('');
+  const branches = getBranchNames(versions);
 
   if (!isOpen) return null;
 
@@ -78,6 +91,24 @@ export const VersionHistoryDrawer: React.FC<VersionHistoryDrawerProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        <div className="p-4 border-b border-slate-800 bg-slate-900/70 space-y-3">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-sky-400" />
+            <select value={activeBranch} onChange={(event) => onSwitchBranch(event.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white">
+              {branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </select>
+            <select defaultValue="" onChange={(event) => { if (event.target.value) onMergeBranch(event.target.value); event.target.value = ''; }} className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white" title="Merge nhánh vào nhánh hiện tại">
+              <option value="">Merge từ…</option>
+              {branches.filter((branch) => branch !== activeBranch).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </select>
+            <GitMerge className="w-4 h-4 text-purple-400" />
+          </div>
+          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); if (!newBranch.trim()) return; onCreateBranch(newBranch); setNewBranch(''); }}>
+            <input value={newBranch} onChange={(event) => setNewBranch(event.target.value)} placeholder="feature/ten-nhanh" className="flex-1 px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white" />
+            <button type="submit" className="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white">Tạo nhánh</button>
+          </form>
         </div>
 
         {/* Commit New Version Section */}
@@ -173,6 +204,7 @@ export const VersionHistoryDrawer: React.FC<VersionHistoryDrawerProps> = ({
                       <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-indigo-300">
                         {ver.versionNumber}
                       </span>
+                      <span className="text-[10px] text-sky-300">{ver.branchName}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.color}`}>
                         {badge.label}
                       </span>
@@ -220,7 +252,7 @@ export const VersionHistoryDrawer: React.FC<VersionHistoryDrawerProps> = ({
 
                   <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
                     <span>Thời gian: {new Date(ver.createdAt).toLocaleString('vi-VN')}</span>
-                    <span>Độ dài: {ver.content.length} ký tự</span>
+                    <span>{ver.mergeParentId ? 'merge · ' : ''}{ver.contentHash.slice(0, 8)} · {ver.content.length} ký tự</span>
                   </div>
                 </div>
               );

@@ -7,7 +7,7 @@ export const FABRIC_PRESETS = [
     title: 'Phân Tích Chiến Lược Toàn Diện (SWOT & Action Matrix)',
     category: 'business',
     framework: 'CO-STAR',
-    recommendedModel: 'gemini-1.5-pro',
+    recommendedModel: 'gemini-3.1-pro-preview',
     tags: ['Chiến lược', 'Kinh doanh', 'Phân tích', 'Ma trận SWOT'],
     description: 'Đánh giá chuyên sâu điểm mạnh, điểm yếu, cơ hội và thách thức kèm ma trận hành động kết hợp SO, WO, ST, WT.',
     prompt: `[ROLE & CONTEXT]
@@ -40,7 +40,7 @@ Sử dụng bảng Markdown và cấu trúc đề mục rõ ràng:
     title: 'Điều Tra Căn Nguyên Vấn Đề (Root Cause Analysis - 5 Whys)',
     category: 'business',
     framework: 'CRISPE',
-    recommendedModel: 'gemini-2.0-flash',
+    recommendedModel: 'gemini-3.8-flash',
     tags: ['RCA', 'Problem Solving', 'Quản trị vận hành'],
     description: 'Áp dụng phương pháp 5 Whys của Toyota để tìm ra gốc rễ vấn đề vận hành hoặc chất lượng sản phẩm.',
     prompt: `[ROLE & CONTEXT]
@@ -75,7 +75,7 @@ Trả về dạng chuỗi logic phân cấp và bảng giải pháp:
     title: 'Thẩm Tra An Toàn Mã Nguồn Chuyên Sâu (Security Code Audit)',
     category: 'engineering',
     framework: 'STANDARD-PRO',
-    recommendedModel: 'gemini-1.5-pro',
+    recommendedModel: 'gemini-3.1-pro-preview',
     tags: ['Security', 'OWASP Top 10', 'Code Audit', 'Vulnerability'],
     description: 'Quét lỗ hổng bảo mật, SQL Injection, XSS, RCE, Broken Auth và đề xuất bản vá code an toàn.',
     prompt: `[ROLE & CONTEXT]
@@ -110,7 +110,7 @@ Báo cáo theo cấu trúc chuẩn CVE/Advisory:
     title: 'Tái Cấu Trúc Mã Nguồn Chuẩn Clean Architecture & SOLID',
     category: 'engineering',
     framework: 'CRISPE',
-    recommendedModel: 'gemini-2.0-flash',
+    recommendedModel: 'gemini-3.8-flash',
     tags: ['Clean Architecture', 'SOLID', 'Refactor', 'Design Patterns'],
     description: 'Tách biệt Domain, Use Case, Interface Adapters, Infrastructure theo tiêu chuẩn Uncle Bob.',
     prompt: `[ROLE & CONTEXT]
@@ -146,7 +146,7 @@ Trình bày cấu trúc thư mục dạng cây và các file code riêng biệt 
     title: 'Chuỗi Email Tiếp Cận Doanh Nghiệp B2B Tỷ Lệ Mở 60%+',
     category: 'copywriting',
     framework: 'CO-STAR',
-    recommendedModel: 'gemini-2.0-flash',
+    recommendedModel: 'gemini-3.8-flash',
     tags: ['Cold Email', 'B2B', 'Sales Outreach', 'Copywriting'],
     description: 'Bộ chuỗi 3 email tiếp cận khách hàng doanh nghiệp B2B với hook đánh trúng nỗi đau và CTA tự nhiên.',
     prompt: `[ROLE & CONTEXT]
@@ -175,7 +175,7 @@ Hiển thị rõ Subject Line và Body cho từng Email 1, 2, 3.`
     title: 'Kịch Bản Trang Bán Hàng Chuyển Đổi Cao (High-Converting Landing Page)',
     category: 'copywriting',
     framework: 'RTF',
-    recommendedModel: 'gemini-1.5-pro',
+    recommendedModel: 'gemini-3.1-pro-preview',
     tags: ['Landing Page', 'Conversion Rate', 'AIDA', 'Copywriting'],
     description: 'Xây dựng toàn bộ nội dung Landing page từ Hero Header, Pain Point, Solution đến Testimonials và FAQs.',
     prompt: `[ROLE & CONTEXT]
@@ -206,7 +206,7 @@ Cấu trúc từng Section cần có:
     title: 'Prompt Tạo Ảnh Siêu Thực Midjourney v6 / Flux.1',
     category: 'multimodal',
     framework: 'STANDARD-PRO',
-    recommendedModel: 'gemini-2.0-flash',
+    recommendedModel: 'gemini-3.8-flash',
     tags: ['Midjourney v6', 'Flux.1', 'Photorealism', 'Cinematic Lighting'],
     description: 'Thiết lập đầy đủ thông số máy ảnh chuyên nghiệp, tiêu cự, khẩu độ, ánh sáng và tham số tỷ lệ khung hình.',
     prompt: `[ROLE & CONTEXT]
@@ -235,7 +235,7 @@ Yêu cầu kỹ thuật bắt buộc:
     title: 'Prompt Chỉ Đạo Góc Quay Video Điện Ảnh (Sora / Kling / Runway Gen-3)',
     category: 'multimodal',
     framework: 'STANDARD-PRO',
-    recommendedModel: 'gemini-2.0-flash',
+    recommendedModel: 'gemini-3.8-flash',
     tags: ['Video AI', 'Sora', 'Runway Gen-3', 'Camera Movement', 'Kling'],
     description: 'Chỉ đạo chuyển động camera 3D, tốc độ khung hình, ánh sáng động và vật lý chuyển động cho video AI.',
     prompt: `[ROLE & CONTEXT]
@@ -266,7 +266,7 @@ Các thành phần cần chi tiết hóa:
     title: 'Phản Biện & Đánh Giá Bài Báo Khoa Học (Academic Paper Critique)',
     category: 'research',
     framework: 'CO-STAR',
-    recommendedModel: 'gemini-1.5-pro',
+    recommendedModel: 'gemini-3.1-pro-preview',
     tags: ['Research', 'Academic', 'Peer Review', 'Methodology'],
     description: 'Thẩm định phương pháp luận, cỡ mẫu, độ tin cậy thống kê và đóng góp mới của bài báo khoa học.',
     prompt: `[ROLE & CONTEXT]

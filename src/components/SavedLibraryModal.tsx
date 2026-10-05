@@ -59,7 +59,7 @@ export const SavedLibraryModal: React.FC<SavedLibraryModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white">Kho Prompt Đã Lưu ({savedPrompts.length})</h3>
-              <p className="text-xs text-slate-400">Quản lý các mẫu prompt đạt chuẩn 95-100 điểm</p>
+              <p className="text-xs text-slate-400">Quản lý các mẫu prompt và kết quả đánh giá đã lưu</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

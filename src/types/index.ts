@@ -38,8 +38,9 @@ export interface SavedPrompt {
 
 export interface GeminiConfig {
   apiKey: string;
-  model: 'gemini-2.0-flash' | 'gemini-1.5-flash' | 'gemini-1.5-pro';
+  model: string;
   temperature: number;
+  timeoutMs?: number;
 }
 
 export interface PromptExecutionResult {
@@ -72,11 +73,16 @@ export interface PromptVersion {
   stage: VersionStage;
   score?: number;
   createdAt: string;
+  branchName: string;
+  parentId?: string;
+  mergeParentId?: string;
+  contentHash: string;
+  promptId?: string;
 }
 
 export interface SecurityCheckItem {
   id: string;
-  category: 'injection_defense' | 'leakage_defense' | 'hallucination_defense' | 'jailbreak_defense';
+  category: string;
   title: string;
   status: 'pass' | 'warning' | 'fail';
   description: string;
@@ -89,6 +95,19 @@ export interface RedTeamSecurityReport {
   checks: SecurityCheckItem[];
   patchedPrompt?: string;
   evaluatedAt: string;
+  attackResults?: SecurityAttackResult[];
+  dynamicPassRate?: number;
+  mode?: 'static' | 'dynamic';
+}
+
+export interface SecurityAttackResult {
+  id: string;
+  category: string;
+  payload: string;
+  status: 'pass' | 'fail' | 'error';
+  output?: string;
+  reason: string;
+  latencyMs?: number;
 }
 
 export interface DiffToken {

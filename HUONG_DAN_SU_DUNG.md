@@ -1,219 +1,268 @@
-# 📘 HƯỚNG DẪN SỬ DỤNG CHI TIẾT - LPROMPT STUDIO (Phiên bản v2.5)
+# Hướng dẫn sử dụng LPrompts Studio 3.0
 
-Chào mừng bạn đến với **LPrompt Studio** – Môi trường phát triển, thẩm định, quản lý vòng đời, kiểm thử hàng loạt và tối ưu hóa Prompt chuyên nghiệp (PromptOps IDE) dành cho kỹ sư Prompt và lập trình viên AI.
+Tài liệu này mô tả đúng trạng thái working tree hiện tại. Các điểm số heuristic, nội dung do Gemini tạo và kết quả red-team chỉ là tín hiệu hỗ trợ; chúng không phải chứng nhận chất lượng hoặc an toàn production.
 
----
+## 1. Yêu cầu và cài đặt
 
-## 📑 MỤC LỤC
-1. [Khởi Động Local Service v2.5 & Quản Trị Hệ Thống](#1-khởi-động-local-service-v25--quản-trị-hệ-thống)
-2. [Cơ Sở Dữ Liệu Nhúng An Toàn `data/lprompt.db` (Portable Embedded SQLite)](#2-cơ-sở-dữ-liệu-nhúng-an-toàn-datalpromptdb-portable-embedded-sqlite)
-3. [Tích Hợp Giao Thức Model Context Protocol (MCP) Cho Cursor & Claude](#3-tích-hợp-giao-thức-model-context-protocol-mcp-cho-cursor--claude)
-4. [Cấu Hình Gemini API Miễn Phí (BYOK)](#4-cấu-hình-gemini-api-miễn-phí-byok)
-5. [Kiểm Thử Hàng Loạt - Batch Test Suite & Matrix Runner (v2.0)](#5-kiểm-thử-hàng-loạt---batch-test-suite--matrix-runner-v20)
-6. [Tự Động Sinh Mẫu Vàng - DSPy-Style Auto Few-Shot (v2.0)](#6-tự-động-sinh-mẫu-vàng---dspy-style-auto-few-shot-v20)
-7. [Kho Mẫu Chuyên Sâu Tích Hợp - Fabric-Style Presets Hub (v2.0)](#7-kho-mẫu-chuyên-sâu-tích-hợp---fabric-style-presets-hub-v20)
-8. [Quản Lý Phiên Bản Git-Style & 1-Click Rollback (v1.2)](#8-quản-lý-phiên-bản-git-style--1-click-rollback-v12)
-9. [So Sánh Trực Quan Thay Đổi Từng Từ - Visual Diff (v1.2)](#9-so-sánh-trực-quan-thay-đổi-từng-từ---visual-diff-v12)
-10. [Quét Lỗ Hổng Bảo Mật Red-Teaming & Tự Động Vá Guardrails (v1.2)](#10-quét-lỗ-hổng-bảo-mật-red-teaming--tự-động-vá-guardrails-v12)
-11. [Sử Dụng Biến Động Template Engine `{{variable}}` (v1.1)](#11-sử-dụng-biến-động-template-engine-variable-v11)
-12. [Chạy Thử Nghiệm Prompt Trực Tiếp - Live Playground (v1.1)](#12-chạy-thử-nghiệm-prompt-trực-tiếp---live-playground-v11)
-13. [Xuất Mã Nguồn SDK 1-Click: Python, TypeScript, cURL (v1.1)](#13-xuất-mã-nguồn-sdk-1-click-python-typescript-curl-v11)
-14. [Phân Hệ Tối Ưu Prompt Bằng Gemini Pro (Optimizer Studio)](#14-phân-hệ-tối-ưu-prompt-bằng-gemini-pro-optimizer-studio)
-15. [Phân Hệ Thẩm Định & Chấm Điểm 100 Điểm Song Ngữ (Evaluator)](#15-phân-hệ-thẩm-định--chấm-điểm-100-điểm-song-ngữ-evaluator)
-16. [Hướng Dẫn Chuyên Biệt Theo Từng Phân Hệ Đa Phương Thức](#16-hướng-dẫn-chuyên-biệt-theo-từng-phân-hệ-đa-phương-thức)
+- Node.js 24 trở lên.
+- Python 3.10 trở lên chỉ bắt buộc nếu dùng bước biên dịch DSPy.
+- Gemini API key chỉ cần khi chạy model Gemini thật.
 
----
+```powershell
+npm ci
+npm run check
+```
 
-## 1. Khởi Động Local Service v2.5 & Quản Trị Hệ Thống
+Nếu dùng DSPy:
 
-Từ phiên bản v2.5, LPrompt Studio chuyển đổi thành **Local Background Service** siêu nhẹ (~25MB RAM) phục vụ trên cổng `8484`. Bạn có thể quản lý theo 3 cách:
+```powershell
+py -3 -m pip install -r python/requirements.txt
+```
 
-### Cách 1: Khởi động kèm mở trình duyệt (Khuyên dùng hàng ngày)
-* Nhấp đúp chuột vào file: **`Run_LPrompt_Service.bat`**.
-* Hệ thống sẽ tự động kích hoạt service ngầm và mở trình duyệt tại: **`http://localhost:8484`**.
+## 2. Khởi động
 
-### Cách 2: Khởi động ngầm hoàn toàn tĩnh lặng (Silent Background Service)
-* Nhấp đúp chuột vào file: **`Start_LPrompt_Service.vbs`**.
-* Service sẽ chạy ngầm dưới nền Windows mà **hoàn toàn KHÔNG mở bất kỳ cửa sổ console đen nào**.
-* Một thông báo Windows Balloon nhỏ sẽ xác nhận service đã kích hoạt thành công.
+### Service production
 
-### Cách 3: Dừng Service khi không dùng
-* Nhấp đúp chuột vào file: **`Stop_LPrompt_Service.bat`**.
-* Script tự động tìm tiến trình chiếm cổng 8484 và giải phóng an toàn.
+```powershell
+npm run build
+npm start
+```
 
----
+Mặc định service nghe tại `http://127.0.0.1:8484` và phục vụ cả giao diện, REST API và MCP.
 
-## 2. Cơ Sở Dữ Liệu Nhúng An Toàn `data/lprompt.db` (Portable Embedded SQLite)
+### Chế độ phát triển
 
-Toàn bộ dữ liệu của LPrompt Studio được lưu trữ trong file SQLite nhúng trực tiếp tại:
-📁 **`d:\DevV2\LPrompt\data\lprompt.db`**
+```powershell
+npm run dev
+```
 
-### Điểm mạnh vượt trội:
-1. **Chống mất mát dữ liệu khi cài lại Windows:** 
-   - Dữ liệu nằm ở ổ `D:` gắn liền với thư mục dự án, không bao giờ bị ảnh hưởng khi format ổ `C:` hoặc cài lại hệ điều hành.
-2. **Cơ chế Tự Động Phục Hồi (Self-Healing):**
-   - Khi khởi động, nếu chưa thấy file `lprompt.db`, Service sẽ tự động sinh bảng và cấu trúc schema.
-3. **Sao lưu tự động hàng ngày (Auto-Backup Snapshots):**
-   - Mỗi ngày một bản snapshot JSON sẽ được tự động ghi vào thư mục `data/backups/lprompt_snapshot_YYYYMMDD.json`.
-4. **Tính di động (100% Portable):**
-   - Bạn có thể copy toàn bộ thư mục `LPrompt` sang máy khác, dữ liệu và cấu hình sẽ đi theo trọn vẹn.
+Vite thường chạy tại `http://localhost:5173`. Giao diện sẽ thử kết nối service tại `http://127.0.0.1:8484`; nếu service không chạy, thư viện và lịch sử vẫn dùng cache trình duyệt nhưng REST, SQLite, MCP và DSPy backend không khả dụng.
 
----
+### Script Windows
 
-## 3. Tích Hợp Giao Thức Model Context Protocol (MCP) Cho Cursor & Claude
+- `Run_LPrompt_Service.bat`: cài package nếu thiếu, build production, chạy service ẩn, đợi `/health` tối đa 15 giây rồi mới mở trình duyệt.
+- `Start_LPrompt_Service.vbs`: chỉ khởi chạy `node server/index.js` trong cửa sổ ẩn; script này không tự kiểm tra health và không hiện thông báo thành công.
+- `Run_LPrompt_Service_Console.bat`: chạy service trong console để xem log.
+- `Stop_LPrompt_Service.bat`: đọc `data/lprompt.pid`, xác minh PID là tiến trình Node rồi mới dừng. Script không quét và kill mọi tiến trình đang dùng cổng 8484.
 
-LPrompt Service tích hợp sẵn **MCP Server (Model Context Protocol)** trên cổng `http://localhost:8484/mcp`, cho phép các IDE AI hàng đầu kết nối trực tiếp:
+## 3. Cấu hình service
 
-### Cấu hình trong Cursor / Claude Desktop / Antigravity:
-Thêm cấu hình sau vào file cấu hình MCP của bạn (`claude_desktop_config.json` hoặc Cursor MCP settings):
+Các biến mẫu nằm trong `.env.example`. Vite nạp biến `VITE_*` khi chạy/build frontend; tiến trình Node hiện không dùng `dotenv`, nên các biến `LPROMPT_*` phải được đặt trong shell, process manager hoặc công cụ nạp env bên ngoài.
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---:|---|
+| `LPROMPT_HOST` | `127.0.0.1` | Địa chỉ bind |
+| `LPROMPT_PORT` | `8484` | Cổng HTTP |
+| `LPROMPT_REQUEST_TIMEOUT_MS` | `30000` trong file mẫu | Timeout request phía server |
+| `LPROMPT_DB_FILE` | `data/lprompt.db` | Có thể đổi đường dẫn database |
+| `LPROMPT_PYTHON` | `py` trên Windows, `python3` trên hệ khác | Runtime cho DSPy |
+| `VITE_LPROMPT_API_BASE` | `http://127.0.0.1:8484` trong file mẫu | Base URL được đóng vào frontend bởi Vite |
+
+`VITE_GEMINI_API_KEY` vẫn xuất hiện trong `.env.example` nhưng code giao diện hiện không đọc biến này. Hãy cấu hình key bằng modal `API Key`; không nên đóng secret vào frontend bundle.
+
+Bind ngoài loopback bị từ chối nếu thiếu cả ba cấu hình:
+
+- `LPROMPT_AUTH_TOKEN` dài tối thiểu 24 ký tự;
+- `LPROMPT_ALLOWED_HOSTS`;
+- `LPROMPT_ALLOWED_ORIGINS`.
+
+Client remote phải gửi `Authorization: Bearer <token>`. Cấu hình này không thay thế TLS, reverse proxy hoặc firewall.
+
+Giao diện browser hiện không có ô cấu hình Bearer token cho remote mode. Vì vậy remote bind phù hợp cho API/MCP client tự gửi header hoặc hệ thống có reverse proxy xử lý xác thực; đồng bộ REST từ giao diện browser sẽ nhận `401` nếu không có lớp trung gian phù hợp.
+
+## 4. Gemini API
+
+Mở nút `API Key`, nhập key, chọn model và bấm kiểm tra kết nối. Khi lưu, cấu hình nằm trong `localStorage` của trình duyệt.
+
+Các model trong code hiện tại:
+
+| Model | Vai trò | Giá Standard tham chiếu/1M token |
+|---|---|---:|
+| `gemini-3.8-flash` | Mặc định | input $0.75, output $3.75 |
+| `gemini-3.5-flash-lite` | Tác vụ nhẹ/lưu lượng lớn | input $0.30, output $2.50 |
+| `gemini-3.1-pro-preview` | Suy luận sâu, trạng thái preview | input $2.00, output $12.00 |
+
+Giá và quota có thể thay đổi; kiểm tra [danh sách model](https://ai.google.dev/gemini-api/docs/models) và [bảng giá chính thức](https://ai.google.dev/gemini-api/docs/pricing) trước khi sử dụng. Chi phí hiển thị trong Playground chỉ là ước tính từ usage metadata; nếu metadata thiếu, ứng dụng ước lượng token từ độ dài ký tự.
+
+API key không được đưa vào code export hoặc SQLite. Tuy nhiên `localStorage` không phải secret vault. Với DSPy, key được gửi tới service local và truyền cho tiến trình Python qua stdin.
+
+## 5. Evaluator và Optimizer
+
+### Evaluator
+
+Evaluator cục bộ chấm tối đa 100 điểm theo năm nhóm:
+
+1. Role & Context: 20.
+2. Task & Instruction: 25.
+3. Constraints & Rules: 20.
+4. Output Format: 20.
+5. Examples & Specs: 15.
+
+Chọn một trong năm domain: research, image, video, code hoặc audio. Nút `Chấm Điểm Cục Bộ` chạy heuristic không cần API key. Nút `Chấm Gemini` gọi model đã chọn và fallback về đánh giá cục bộ khi xảy ra lỗi, đồng thời hiển thị lỗi trên giao diện.
+
+Điểm số không chứng minh prompt sẽ đạt chất lượng tương ứng trên mọi model hoặc dữ liệu thực tế.
+
+### Optimizer
+
+Tab giao diện vẫn mang nhãn `Tối Ưu Gemini Pro`, nhưng request thực tế dùng model đang chọn trong cấu hình. Người dùng có thể chọn mục tiêu, framework và instruction bổ sung. Kết quả là bản đề xuất cần được review, chạy Playground và Batch Test trước khi dùng.
+
+## 6. Template và Playground
+
+Biến có dạng `{{ten_bien}}`. Ứng dụng tự tạo form nhập giá trị và chỉ thay thế biến có giá trị không rỗng; placeholder chưa nhập được giữ nguyên.
+
+Playground:
+
+- Có API key: gọi Gemini, hiển thị output, latency, token và chi phí ước tính.
+- Không có API key: trả về output mô phỏng, được đánh dấu `simulation`; không phải phản hồi từ Gemini.
+- Đóng modal sẽ hủy request đang chạy. Gemini client cũng có timeout cấu hình.
+
+## 7. Batch Evaluation
+
+Batch Evaluation hỗ trợ bốn assertion:
+
+- `contains`;
+- `not_contains`;
+- `regex`;
+- `min_length`.
+
+Test case được chạy tuần tự. Có API key thì từng case gọi Gemini; không có key thì dùng output mô phỏng. Giao diện báo pass/fail/error, latency trung bình và cho phép xuất JSON. Đóng modal sẽ hủy batch đang chạy; từng lỗi case được ghi thành kết quả `error` trừ khi toàn bộ batch bị hủy.
+
+Đây là runner nội bộ, không phải tích hợp trực tiếp với promptfoo hoặc Langfuse.
+
+## 8. Few-shot và DSPy
+
+Quy trình hiện tại gồm hai bước:
+
+1. `Tự Động Sinh Few-Shot`:
+   - dùng Gemini nếu có API key hợp lệ;
+   - nếu Gemini lỗi hoặc không có key, dùng bộ sinh heuristic cục bộ.
+2. `Biên dịch DSPy`:
+   - yêu cầu service local đang chạy, API key và tối thiểu hai ví dụ;
+   - gọi Python DSPy 3.4.0 với `BootstrapFewShot`;
+   - tiến trình bị dừng nếu quá 90 giây;
+   - nếu Python hoặc DSPy chưa cài, giao diện hiển thị lỗi thay vì giả vờ thành công.
+
+Nút `Gắn Few-Shot Vào Prompt` chèn các ví dụ hiện có vào section `[EXAMPLES & SPECS]`. Thao tác này không đảm bảo tự động tăng một số điểm cố định hoặc loại bỏ hoàn toàn ảo giác.
+
+## 9. Version graph
+
+Mở `Lịch Sử` hoặc `Phiên Bản` để:
+
+- commit nội dung hiện tại với message và stage `draft`, `testing` hoặc `production`;
+- tạo nhánh mới từ head của nhánh hiện tại;
+- chuyển nhánh và nạp nội dung head;
+- merge một nhánh vào nhánh hiện tại;
+- so sánh diff hoặc nạp lại nội dung một commit.
+
+Mỗi commit có `branchName`, `parentId`, tùy chọn `mergeParentId` và content hash. Nếu hai nhánh đều thay đổi từ tổ tiên chung, ứng dụng tạo conflict markers `<<<<<<<`, `=======`, `>>>>>>>` và chưa tạo merge commit. Người dùng phải sửa conflict rồi commit để hoàn tất merge.
+
+Chức năng `Rollback` trên giao diện chỉ nạp nội dung cũ vào editor; nó không tự tạo revert commit. Không thể xóa commit đang là cha trực tiếp hoặc merge-parent của commit khác.
+
+Khi service online, commit được lưu vào localStorage rồi gửi sang SQLite. Nếu đồng bộ SQLite thất bại, bản local vẫn còn và giao diện hiển thị cảnh báo.
+
+### Visual Diff
+
+Nút `So sánh Diff` hoặc biểu tượng compare trong lịch sử mở chế độ so sánh theo token. Giao diện có Inline View và Split View, đồng thời cho phép áp dụng phần nội dung bên phải vào editor. Đây là diff hiển thị, không phải thuật toán merge ba chiều; merge branch dùng logic riêng trong version graph.
+
+## 10. Security scanner
+
+Scanner static kiểm tra sự hiện diện của guardrail liên quan đến 10 nhóm OWASP for LLM Applications:
+
+`LLM01` Prompt Injection, `LLM02` Sensitive Information Disclosure, `LLM03` Supply Chain, `LLM04` Data and Model Poisoning, `LLM05` Improper Output Handling, `LLM06` Excessive Agency, `LLM07` System Prompt Leakage, `LLM08` Vector and Embedding Weaknesses, `LLM09` Misinformation và `LLM10` Unbounded Consumption.
+
+- Không có API key: chỉ chạy 10 rule static.
+- Có API key: chạy thêm 6 payload động theo từng nhóm tối đa hai request song song.
+- Đóng modal sẽ abort các request còn lại.
+- Auto-patch chèn guardrail tổng quát; không tự chứng minh prompt đã an toàn.
+
+Payload động hiện phát hiện bằng canary và các chỉ dấu output xác định. Nó không thay thế pentest, policy engine hoặc đánh giá thủ công.
+
+## 11. Presets, thư viện và code export
+
+- Presets Hub có năm category: business, engineering, copywriting, multimodal và research.
+- Thư viện prompt lưu ở localStorage và đồng bộ SQLite khi service online.
+- Code export hỗ trợ Python `google-genai`, TypeScript `@google/genai`, cURL và JSON.
+- Export luôn dùng `YOUR_GEMINI_API_KEY` hoặc biến môi trường, không chép key đang cấu hình.
+
+## 12. SQLite và backup
+
+Database mặc định: `data/lprompt.db`. SQLite bật WAL, foreign keys và busy timeout 5 giây. Schema hiện có các bảng:
+
+- `prompts`;
+- `prompt_versions`;
+- `test_suites`;
+- `security_audits`;
+- `settings`.
+
+Snapshot `data/backups/lprompt_snapshot_YYYYMMDD.json` được ghi atomic lúc database khởi tạo và sau mutation qua lớp database. File của cùng một ngày được ghi đè bằng trạng thái mới nhất, không phải tạo một file mới cho mỗi thay đổi. `POST /api/backup` tạo một file full backup có timestamp.
+
+API key và các cấu hình chỉ nằm trong browser localStorage không được đưa vào backup SQLite.
+
+## 13. REST và MCP
+
+REST endpoints:
+
+- `GET /health`;
+- `GET|POST /api/prompts`;
+- `DELETE /api/prompts/:id`;
+- `GET|POST /api/versions`;
+- `DELETE /api/versions/:id`;
+- `GET /api/presets`;
+- `POST /api/backup`;
+- `POST /api/dspy/optimize`.
+
+JSON body bị giới hạn 2 MB và được validate bằng Zod.
+
+MCP dùng stateless Streamable HTTP tại `http://127.0.0.1:8484/mcp`, với bốn tool:
+
+- `lprompt_evaluate`: heuristic cục bộ đơn giản;
+- `lprompt_list_presets`;
+- `lprompt_get_versions`;
+- `lprompt_commit_version`.
+
+Ví dụ cấu hình cho MCP client hỗ trợ remote Streamable HTTP:
 
 ```json
 {
   "mcpServers": {
     "lprompt": {
-      "url": "http://localhost:8484/mcp"
+      "url": "http://127.0.0.1:8484/mcp"
     }
   }
 }
 ```
 
-### Các công cụ AI bạn có thể ra lệnh trực tiếp:
-* **`lprompt_evaluate`:** *"Hãy thẩm định chất lượng prompt này theo chuẩn LPrompt 100 điểm."*
-* **`lprompt_list_presets`:** *"Lấy cho tôi mẫu prompt phân tích SWOT từ LPrompt Presets Hub."*
-* **`lprompt_get_versions`:** *"Liệt kê các phiên bản prompt đã lưu trong database LPrompt."*
-* **`lprompt_commit_version`:** *"Commit phiên bản prompt này vào database LPrompt với ghi chú 'Bản chuẩn release'."*
+Cú pháp cấu hình chính xác phụ thuộc MCP client và phiên bản của client đó.
 
----
+## 14. Kiểm thử và giới hạn đã biết
 
-## 4. Cấu Hình Gemini API Miễn Phí (BYOK)
+```powershell
+npm run lint
+npm test
+npm run build
+npm run check
+```
 
-LPrompt Studio áp dụng mô hình **BYOK (Bring Your Own Key)**. Khóa API chỉ lưu trên máy bạn, bảo mật 100%.
+Trạng thái kiểm tra gần nhất:
 
-1. Truy cập vào trang tạo key miễn phí của Google: **[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)**.
-2. Đăng nhập tài khoản Google và bấm **"Create API Key"**.
-3. Sao chép chuỗi khóa (bắt đầu bằng `AIzaSy...`).
-4. Trên giao diện LPrompt Studio, bấm nút **"API Key"** ở góc phải thanh tiêu đề.
-5. Dán khóa API vào, chọn model:
-   * **`gemini-2.0-flash` (Khuyên dùng):** Tốc độ cực nhanh (<1s), miễn phí 1.500 lượt/ngày.
-   * **`gemini-1.5-pro`:** Phân tích ngữ nghĩa chuyên sâu và tái cấu trúc prompt phức tạp.
-6. Bấm **"Kiểm tra kết nối"** ➔ Hiện thông báo xanh thành công ➔ Bấm **"Lưu cấu hình"**.
+- lint sạch;
+- 7 test file, 20/20 test case đạt;
+- production build đạt;
+- REST, SQLite DTO và MCP integration đạt trên database tạm;
+- `npm audit` báo 0 vulnerability;
+- `pip check` không báo dependency Python hỏng.
 
----
+Chưa được xác minh tự động với API key Gemini thật. Các test Gemini dùng mock response; DSPy đã được kiểm tra dependency, import, API signature, missing-runtime và process timeout nhưng chưa chạy compile qua Gemini thật. Vite còn cảnh báo bundle JavaScript chính khoảng 525 kB sau minify.
 
-## 5. Kiểm Thử Hàng Loạt - Batch Test Suite & Matrix Runner (v2.0)
+## 15. Dữ liệu runtime và Git
 
-1. Nhấp nút **`[Batch Evals]`** trên Header hoặc nút **`[Batch Test]`** bên cạnh ô soạn thảo.
-2. Thiết lập tập dữ liệu kiểm thử (Dataset Cases) cho các biến `{{variable}}`.
-3. Chọn các quy tắc Assertion:
-   * `Contains`: Phải chứa chuỗi kỳ vọng.
-   * `Not Contains`: Không được dính từ cấm (chống ảo giác).
-   * `Regex`: Khớp biểu thức chính quy.
-   * `Min Length`: Đạt độ dài tối thiểu.
-4. Bấm **`[Chạy Toàn Bộ Test Suite]`** và theo dõi tỷ lệ Pass/Fail, Latency trung bình và xuất báo cáo JSON.
+Các file database, WAL, PID, backup runtime, `dist`, `node_modules` và `.env` được ignore khỏi Git.
 
----
+## 16. Nhận diện thương hiệu & Logo
 
-## 6. Tự Động Sinh Mẫu Vàng - DSPy-Style Auto Few-Shot (v2.0)
-
-1. Bấm nút **`[Few-Shot]`** trên Header hoặc cạnh nút Chấm Điểm.
-2. Bấm **`[Tự Động Sinh Few-Shot]`**:
-   * Gemini Pro phân tích sâu ngữ cảnh để sinh 2–3 cặp Input/Output mẫu chuẩn mực (Golden Examples).
-3. Bấm **`[Gắn Few-Shot Vào Prompt (+15đ C5)]`** để tự động đạt điểm tối đa 15/15đ cho trụ cột C5 và giảm thiểu ảo giác của LLM.
-
----
-
-## 7. Kho Mẫu Chuyên Sâu Tích Hợp - Fabric-Style Presets Hub (v2.0)
-
-1. Bấm nút **`[Presets]`** trên thanh tiêu đề Header.
-2. Khám phá 5 chuyên mục lớn:
-   * 📊 **Kinh Doanh & Quản Trị:** Phân tích SWOT, Điều tra nguyên nhân 5-Whys.
-   * 💻 **Kỹ Thuật & Code:** Thẩm tra bảo mật OWASP, Tái cấu trúc Clean Architecture & SOLID.
-   * ✍️ **Copywriting & Content:** Cold Email B2B tỷ lệ mở 60%+, Kịch bản High-Converting Landing Page.
-   * 🎨 **Đa Phương Thức:** Prompt Midjourney v6 / Flux.1 siêu thực, Prompt camera video Sora/Runway Gen-3.
-   * 🔬 **Nghiên Cứu:** Phản biện bài báo khoa học.
-3. Bấm **`[Xem chi tiết]`** hoặc **`[Đưa Vào Workspace]`** để sử dụng ngay.
-
----
-
-## 8. Quản Lý Phiên Bản Git-Style & 1-Click Rollback (v1.2)
-
-1. Nhấp nút **`[Lịch Sử]`** trên Header hoặc thanh công cụ.
-2. Bấm **`[+ Tạo Điểm Lưu Phiên Bản Mới]`**:
-   * Nhập thông điệp commit.
-   * Chọn phân tầng: 📝 **Draft** (Nháp) | 🧪 **Testing** (Thử nghiệm) | 🚀 **Production** (Chạy thật).
-3. Dữ liệu được đồng bộ đồng thời vào **SQLite `data/lprompt.db`** và cache trình duyệt.
-4. **1-Click Rollback:** Bấm nút **`[Quay Lại]`** cạnh bất kỳ bản cũ nào để khôi phục tức thì.
-
----
-
-## 9. So Sánh Trực Quan Thay Đổi Từng Từ - Visual Diff (v1.2)
-
-1. Bấm nút **`[So sánh Diff]`** tại Optimizer View hoặc Evaluator View.
-2. Xem chi tiết từng từ: 🟢 Xanh lá (`+`) thêm mới, 🔴 Đỏ gạch ngang (`-`) loại bỏ, ⚪ Xám giữ nguyên.
-3. Hỗ trợ xem Inline Diff hoặc Split View hai cột song song.
-
----
-
-## 10. Quét Lỗ Hổng Bảo Mật Red-Teaming & Tự Động Vá Guardrails (v1.2)
-
-1. Bấm nút **`[Bảo Mật]`** (🛡️) trên Header hoặc cạnh nút Chấm Điểm.
-2. Bấm **`[Bắt Đầu Quét Red-Teaming]`** để kiểm tra 4 nhóm rủi ro: Prompt Injection, System Prompt Leakage, Hallucination, Persona Override.
-3. Bấm **`[Áp Dụng Bản Đã Vá Lỗ Hổng]`** để tự động bổ sung rào chắn Negative Guardrails chuẩn công nghiệp.
-
----
-
-## 11. Sử Dụng Biến Động Template Engine `{{variable}}` (v1.1)
-
-1. Viết tên biến trong ngoặc nhọn kép: `{{ten_bien}}`.
-2. Form nhập liệu tự động sinh bên dưới ô soạn thảo.
-3. Hệ thống tự động ghép giá trị biến khi chạy Playground, Batch Test hoặc xuất mã nguồn.
-
----
-
-## 12. Chạy Thử Nghiệm Prompt Trực Tiếp - Live Playground (v1.1)
-
-1. Bấm nút **`[Playground]`** trên Header hoặc **`[Chạy Thử]`** cạnh prompt.
-2. Đo lường phản hồi thực tế của Gemini API với: Latency (ms), Token usage và chi phí USD ($).
-
----
-
-## 13. Xuất Mã Nguồn SDK 1-Click: Python, TypeScript, cURL (v1.1)
-
-1. Bấm nút **`[Xuất Code]`** trên Header hoặc cạnh bản prompt tối ưu.
-2. Lựa chọn ngôn ngữ: Python (`google-genai`), TypeScript (`@google/genai`), cURL, JSON Spec.
-3. Bấm **`[1-Click Sao Chép Mã]`** để dán thẳng vào dự án.
-
----
-
-## 14. Phân Hệ Tối Ưu Prompt Bằng Gemini Pro (Optimizer Studio)
-
-1. Chọn chuyên mục và nhập prompt thô.
-2. Chọn mục tiêu tối ưu (Production 100đ, Negative Guardrails, Strict Schema, CoT Logic, Tham số chuyên ngành).
-3. Chọn Framework (`CO-STAR`, `CRISPE`, `RTF`, `STANDARD-PRO`).
-4. Bấm **"✨ ĐƯA SANG GEMINI PRO TỐI ƯU HÓA"** và tinh chỉnh thêm qua khung chat tương tác ở cuối trang.
-
----
-
-## 15. Phân Hệ Thẩm Định & Chấm Điểm 100 Điểm Song Ngữ (Evaluator)
-
-* Thẩm định định lượng theo 5 trụ cột:
-  1. `[ROLE & CONTEXT]` (20đ)
-  2. `[TASK & INSTRUCTION]` (25đ)
-  3. `[CONSTRAINTS & RULES]` (20đ)
-  4. `[OUTPUT FORMAT]` (20đ)
-  5. `[EXAMPLES & SPECS]` (15đ)
-* Tự động nhận diện cả tiếng Việt, tiếng Anh và các tiền tố kỹ thuật.
-
----
-
-## 16. Hướng Dẫn Chuyên Biệt Theo Từng Phân Hệ Đa Phương Thức
-
-* 🎨 **Tạo Ảnh:** Tỷ lệ `--ar`, tiêu cự Lens (85mm, 35mm), ánh sáng Cinematic, Negative prompt.
-* 🎬 **Tạo Video:** Camera Dolly, Pan, Tilt, FPV; tốc độ 60fps 4K.
-* 💻 **Lập Trình:** Python 3.12, TypeScript; tiêu chuẩn Clean Architecture, Pydantic, Unit Test.
-* 🎵 **Âm Thanh:** Thẻ `[Verse]`, `[Chorus]`, `[Guitar Solo]`, nhịp BPM, thể loại.
-* 🧠 **Nghiên Cứu:** Khung SWOT, Mermaid diagram, phân tích rủi ro.
-
----
-
-> 💡 **Quy tắc phát triển:** Mọi thay đổi về tính năng, cơ sở dữ liệu hay giao diện của LPrompt Studio sẽ luôn được cập nhật đầy đủ và đồng bộ vào tài liệu này trước mỗi lần commit.
+- **Biểu tượng chữ L chủ đạo**: Thiết kế vector SVG với chữ **L** cách điệu bằng dải màu gradient hồng tím (`#c084fc` -> `#a855f7` -> `#d946ef` -> `#ec4899`), đồng bộ với phong cách giao diện tối của phần mềm.
+- **Dấu ấn AI & Prompt**: Kết hợp ký hiệu prompt chevron `>` và ngôi sao lấp lánh `✦` (Gemini Sparkle) phát sáng neon trong lòng chữ L.
+- **Tích hợp đồng bộ**:
+  - **Browser Favicon**: Đặt tại `public/favicon.svg` và liên kết trong `index.html`.
+  - **Browser Title**: Hiển thị tiêu đề `LPrompts Studio - AI Prompt Engineering & PromptOps IDE`.
+  - **Thanh điều hướng (Header)**: Thành phần `src/components/Logo.tsx` hiển thị sắc nét với hiệu ứng phát sáng nhẹ (ambient neon glow) bên cạnh tên thương hiệu `LPrompts Studio`.

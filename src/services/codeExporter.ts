@@ -1,12 +1,14 @@
 import type { GeminiConfig, ExportLanguage } from '../types';
+import { DEFAULT_GEMINI_MODEL } from './modelCatalog';
 
 export function exportPromptCode(
   prompt: string,
   language: ExportLanguage,
   config: GeminiConfig
 ): string {
-  const model = config.model || 'gemini-2.0-flash';
-  const apiKeyPlaceholder = config.apiKey ? config.apiKey : 'YOUR_GEMINI_API_KEY';
+  const model = config.model || DEFAULT_GEMINI_MODEL;
+  // Never copy a live secret into generated source code.
+  const apiKeyPlaceholder = 'YOUR_GEMINI_API_KEY';
 
   switch (language) {
     case 'python':
@@ -92,14 +94,14 @@ executePrompt().catch(console.error);
     default:
       return JSON.stringify(
         {
-          schema_version: '1.1.0',
+          schema_version: '3.0.0',
           title: 'LPrompt Exported Asset',
           model: model,
           temperature: config.temperature ?? 0.7,
           prompt: prompt,
           exported_at: new Date().toISOString(),
           metadata: {
-            generator: 'LPrompt Studio v1.1',
+            generator: 'LPrompt Studio v3.0',
             char_count: prompt.length,
             word_count: prompt.trim().split(/\s+/).length
           }

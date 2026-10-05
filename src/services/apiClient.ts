@@ -1,6 +1,40 @@
-import type { SavedPrompt, PromptVersion } from '../types';
+import type { SavedPrompt, PromptVersion, FewShotExample, GeminiConfig } from '../types';
 
-const API_BASE = 'http://localhost:8484';
+function getApiBase(): string {
+  const configured = import.meta.env.VITE_LPROMPT_API_BASE?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+  if (typeof window !== 'undefined' && window.location.port === '8484') return '';
+  return 'http://127.0.0.1:8484';
+}
+
+const API_BASE = getApiBase();
+
+async function apiFetch(path: string, init: RequestInit = {}, timeoutMs = 3000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
+function normalizeVersion(value: Record<string, unknown>): PromptVersion {
+  return {
+    id: String(value.id ?? ''),
+    versionNumber: String(value.versionNumber ?? value.version_number ?? ''),
+    commitMessage: String(value.commitMessage ?? value.commit_message ?? ''),
+    content: String(value.content ?? ''),
+    stage: value.stage === 'testing' || value.stage === 'production' ? value.stage : 'draft',
+    score: typeof value.score === 'number' ? value.score : undefined,
+    createdAt: String(value.createdAt ?? value.created_at ?? new Date(0).toISOString()),
+    branchName: String(value.branchName ?? value.branch_name ?? 'main'),
+    parentId: value.parentId || value.parent_id ? String(value.parentId ?? value.parent_id) : undefined,
+    mergeParentId: value.mergeParentId || value.merge_parent_id ? String(value.mergeParentId ?? value.merge_parent_id) : undefined,
+    contentHash: String(value.contentHash ?? value.content_hash ?? ''),
+    promptId: value.promptId || value.prompt_id ? String(value.promptId ?? value.prompt_id) : undefined
+  };
+}
 
 export interface ServiceHealth {
   online: boolean;
@@ -16,7 +50,7 @@ export interface ServiceHealth {
  */
 export async function checkServiceHealth(): Promise<ServiceHealth> {
   try {
-    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1500) });
+    const res = await apiFetch('/health', {}, 1500);
     if (res.ok) {
       const data = await res.json();
       return {
@@ -39,7 +73,7 @@ export async function checkServiceHealth(): Promise<ServiceHealth> {
  */
 export async function fetchServerPrompts(): Promise<SavedPrompt[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/prompts`, { signal: AbortSignal.timeout(2000) });
+    const res = await apiFetch('/api/prompts');
     if (res.ok) {
       const json = await res.json();
       return json.data || [];
@@ -55,11 +89,10 @@ export async function fetchServerPrompts(): Promise<SavedPrompt[] | null> {
  */
 export async function saveServerPrompt(prompt: SavedPrompt): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/prompts`, {
+    const res = await apiFetch('/api/prompts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(prompt),
-      signal: AbortSignal.timeout(2000)
+      body: JSON.stringify(prompt)
     });
     return res.ok;
   } catch {
@@ -72,9 +105,8 @@ export async function saveServerPrompt(prompt: SavedPrompt): Promise<boolean> {
  */
 export async function deleteServerPrompt(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/prompts/${id}`, {
-      method: 'DELETE',
-      signal: AbortSignal.timeout(2000)
+    const res = await apiFetch(`/api/prompts/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
     });
     return res.ok;
   } catch {
@@ -87,10 +119,10 @@ export async function deleteServerPrompt(id: string): Promise<boolean> {
  */
 export async function fetchServerVersions(): Promise<PromptVersion[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/versions`, { signal: AbortSignal.timeout(2000) });
+    const res = await apiFetch('/api/versions');
     if (res.ok) {
       const json = await res.json();
-      return json.data || [];
+      return Array.isArray(json.data) ? json.data.map((item: Record<string, unknown>) => normalizeVersion(item)) : [];
     }
   } catch {
     // Offline
@@ -103,11 +135,10 @@ export async function fetchServerVersions(): Promise<PromptVersion[] | null> {
  */
 export async function saveServerVersion(version: PromptVersion): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/versions`, {
+    const res = await apiFetch('/api/versions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(version),
-      signal: AbortSignal.timeout(2000)
+      body: JSON.stringify(version)
     });
     return res.ok;
   } catch {
@@ -120,12 +151,22 @@ export async function saveServerVersion(version: PromptVersion): Promise<boolean
  */
 export async function deleteServerVersion(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/versions/${id}`, {
-      method: 'DELETE',
-      signal: AbortSignal.timeout(2000)
+    const res = await apiFetch(`/api/versions/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
     });
     return res.ok;
   } catch {
     return false;
   }
+}
+
+export async function optimizeWithDspy(prompt: string, examples: FewShotExample[], config: GeminiConfig): Promise<FewShotExample[]> {
+  const res = await apiFetch('/api/dspy/optimize', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, examples, apiKey: config.apiKey, model: config.model })
+  }, 95_000);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'DSPy optimization thất bại.');
+  if (!Array.isArray(body.examples)) throw new Error('DSPy không trả về danh sách ví dụ hợp lệ.');
+  return body.examples.map((item: Partial<FewShotExample>, index: number) => ({ id: `dspy-${Date.now()}-${index}`, input: String(item.input || ''), output: String(item.output || ''), explanation: item.explanation }));
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { PromptDomain } from '../types';
+import { Logo } from './Logo';
 import {
-  Sparkles,
   BookOpen,
   Key,
   Search,
@@ -70,19 +70,17 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
-            </div>
-          </div>
+          <Logo size={38} glow={true} />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight m-0 p-0 font-sans">LPrompt Studio</h1>
+              <h1 className="text-lg font-bold text-white tracking-tight m-0 p-0 font-sans">
+                LPrompts <span className="text-fuchsia-400 font-semibold text-sm">Studio</span>
+              </h1>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30">
-                PROMPTOPS v1.2
+                PROMPTOPS v2.5
               </span>
             </div>
-            <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, bảo mật & kiểm soát phiên bản Prompt Git-Style</p>
+            <p className="text-xs text-slate-400 m-0 p-0">Môi trường phát triển, bảo mật &amp; kiểm soát phiên bản Prompt Git-Style</p>
           </div>
         </div>
 

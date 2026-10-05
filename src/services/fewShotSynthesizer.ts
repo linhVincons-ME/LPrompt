@@ -1,7 +1,15 @@
 import type { GeminiConfig, FewShotExample, FewShotSynthesisResult } from '../types';
+import { z } from 'zod';
+import { generateGeminiContent, parseGeminiJson } from './geminiClient';
+
+const examplesSchema = z.array(z.object({
+  input: z.string().min(1),
+  output: z.string().min(1),
+  explanation: z.string().optional()
+})).min(1).max(8);
 
 /**
- * Synthesize 2-3 high-quality Few-Shot Input/Output pairs for a prompt (DSPy-style)
+ * Synthesize 2-3 candidate Few-Shot pairs. Real DSPy compilation is exposed separately by the local service.
  */
 export async function synthesizeFewShotExamples(
   prompt: string,
@@ -9,9 +17,6 @@ export async function synthesizeFewShotExamples(
 ): Promise<FewShotSynthesisResult> {
   if (config.apiKey && config.apiKey.trim().length > 10) {
     try {
-      const modelToUse = config.model || 'gemini-2.0-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${config.apiKey}`;
-
       const systemPrompt = `You are a World-Class Few-Shot Prompt Engineer following Stanford DSPy principles.
 Your task is to analyze the user's prompt (which may contain {{variables}} or domain instructions) and synthesize 2 to 3 pristine, realistic, diverse Few-Shot (Input/Output) example pairs.
 These examples teach the LLM the exact structure, depth, schema, and quality expected.
@@ -26,32 +31,13 @@ Do NOT include markdown formatting or quotes around the JSON array. Output purel
 
       const userContent = `${systemPrompt}\n\nHere is the target prompt:\n"""\n${prompt}\n"""\n\nGenerate 2-3 gold-standard Few-Shot Input/Output example pairs in pure JSON.`;
 
-      const payload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: userContent }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: 'application/json'
-        }
-      };
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      const generated = await generateGeminiContent(userContent, config, {
+        responseMimeType: 'application/json',
+        temperature: 0.3
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const rawExamples = JSON.parse(cleanJson);
-
-        const examples: FewShotExample[] = (Array.isArray(rawExamples) ? rawExamples : []).map(
+      const rawExamples = parseGeminiJson(generated.text, examplesSchema);
+      {
+        const examples: FewShotExample[] = rawExamples.map(
           (ex: any, idx: number) => ({
             id: `ex-${Date.now()}-${idx}`,
             input: String(ex.input || `Mẫu đầu vào ${idx + 1}`),

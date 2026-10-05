@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { GeminiConfig, FewShotExample } from '../types';
 import { synthesizeFewShotExamples, integrateExamplesIntoPrompt } from '../services/fewShotSynthesizer';
+import { optimizeWithDspy } from '../services/apiClient';
 import {
   X,
   Target,
@@ -91,7 +92,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white m-0">
-                  DSPy-Style Auto Few-Shot Synthesizer
+                  Few-Shot Synthesizer + DSPy Compiler
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   v2.0 PRO
@@ -118,7 +119,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
             <div className="flex items-center gap-2 text-xs text-purple-200">
               <Info className="w-4 h-4 text-purple-400 shrink-0" />
               <span>
-                Theo nghiên cứu Stanford DSPy, việc cung cấp 2-3 ví dụ mẫu giúp LLM tuân thủ schema output tốt hơn 45% và tăng điểm C5 lên 15/15đ.
+                Sinh ví dụ bằng Gemini, chỉnh nhãn thủ công, sau đó dùng DSPy BootstrapFewShot thật để chọn demos cho compiled program.
               </span>
             </div>
 
@@ -138,6 +139,20 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
                   <span>Tự Động Sinh Few-Shot</span>
                 </>
               )}
+            </button>
+            <button
+              onClick={async () => {
+                if (!config.apiKey) { setErrorMessage('Cần API key để DSPy chạy mô hình và chấm demos.'); return; }
+                if (examples.length < 2) { setErrorMessage('Cần tối thiểu 2 ví dụ đã gắn nhãn để tối ưu DSPy.'); return; }
+                setIsSynthesizing(true); setErrorMessage(null);
+                try { setExamples(await optimizeWithDspy(prompt, examples, config)); }
+                catch (error) { setErrorMessage(error instanceof Error ? error.message : 'DSPy optimization thất bại.'); }
+                finally { setIsSynthesizing(false); }
+              }}
+              disabled={isSynthesizing || examples.length < 2}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold disabled:opacity-50"
+            >
+              <Target className="w-4 h-4" /> Biên dịch DSPy
             </button>
           </div>
 
@@ -246,7 +261,7 @@ export const FewShotSynthesizerModal: React.FC<FewShotSynthesizerModalProps> = (
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold transition-all shadow-md shadow-purple-600/20 disabled:opacity-50"
             >
               <ArrowRight className="w-3.5 h-3.5" />
-              <span>Gắn Few-Shot Vào Prompt (+15đ C5)</span>
+              <span>Gắn Few-Shot Vào Prompt</span>
             </button>
           </div>
         </div>

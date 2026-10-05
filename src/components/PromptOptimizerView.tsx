@@ -54,15 +54,8 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Sync if prop changes and empty
-  React.useEffect(() => {
-    if (currentPrompt && !inputPrompt) {
-      setInputPrompt(currentPrompt);
-    }
-  }, [currentPrompt]);
-
   const goals = [
-    { id: 'production_100', label: 'Chuẩn Production (95-100đ)', desc: 'Bổ sung đầy đủ 5 trụ cột kỹ thuật' },
+    { id: 'production_100', label: 'Mục tiêu Production', desc: 'Bổ sung đầy đủ 5 trụ cột kỹ thuật' },
     { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi (Negative Rules)', desc: 'Chống ảo giác và suy diễn lan man' },
     { id: 'strict_json', label: 'Ép Schema Đầu Ra (JSON/Bảng)', desc: 'Định dạng dữ liệu chuẩn máy đọc' },
     { id: 'cot_reasoning', label: 'Tư Duy Logic Từng Bước (CoT)', desc: 'Phân rã bài toán phức tạp theo pha' },
@@ -129,7 +122,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
         <div className="flex items-center gap-2 text-xs">
           <span className="text-slate-400">Động cơ:</span>
           <span className="font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-indigo-300">
-            {config.model || 'gemini-1.5-pro'}
+            {config.model}
           </span>
           {!config.apiKey && (
             <button
@@ -384,7 +377,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               <Sparkles className="w-8 h-8 text-slate-600" />
               <div className="text-xs font-semibold text-slate-400">Chưa có bản tối ưu</div>
               <p className="text-[11px] max-w-xs">
-                Nhập nội dung vào khung bên trái và bấm <span className="text-indigo-400 font-semibold">"Đưa Sang Gemini Pro Tối Ưu Hóa"</span> để nhận phiên bản chuẩn 95-100 điểm.
+                Nhập nội dung vào khung bên trái và bấm <span className="text-indigo-400 font-semibold">"Đưa Sang Gemini Tối Ưu Hóa"</span> để nhận bản đề xuất và tự kiểm thử lại trước khi dùng.
               </p>
             </div>
           )}

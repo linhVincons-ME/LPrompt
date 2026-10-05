@@ -4,23 +4,19 @@ echo ==============================================================
 echo   Đang dừng LPrompt Background Service (Port 8484)...
 echo ==============================================================
 
-setlocal enabledelayedexpansion
-set FOUND=0
-
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8484 ^| findstr LISTENING') do (
-    set PID=%%a
-    if not "!PID!"=="" (
-        echo [INFO] Phát hiện Process PID: !PID!, đang tiến hành tắt...
-        taskkill /F /PID !PID! >nul 2>&1
-        set FOUND=1
-    )
-)
-
-if "!FOUND!"=="1" (
-    echo [THÀNH CÔNG] Đã dừng LPrompt Service hoàn tất.
-) else (
-    echo [THÔNG BÁO] Không tìm thấy LPrompt Service đang chạy trên cổng 8484.
-)
+if not exist "%~dp0data\lprompt.pid" goto notfound
+set /p LPROMPT_PID=<"%~dp0data\lprompt.pid"
+powershell -NoProfile -Command "$p=Get-Process -Id %LPROMPT_PID% -ErrorAction SilentlyContinue; if (-not $p) { exit 2 }; if ($p.Path -notmatch 'node(.exe)?$') { exit 3 }; Stop-Process -Id %LPROMPT_PID% -Force"
+if errorlevel 1 goto unsafe
+del /q "%~dp0data\lprompt.pid" 2>nul
+echo [THÀNH CÔNG] Đã dừng đúng tiến trình LPrompt PID %LPROMPT_PID%.
+goto done
+:unsafe
+echo [LOI] PID file không trỏ tới tiến trình Node hợp lệ; không dừng tiến trình.
+exit /b 1
+:notfound
+echo [THÔNG BÁO] Không có PID file của LPrompt Service.
+:done
 
 echo ==============================================================
 timeout /t 3 >nul

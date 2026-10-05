@@ -1,4 +1,20 @@
 import type { PromptDomain, PromptEvaluation, QualityTier, GeminiConfig } from '../types';
+import { z } from 'zod';
+import { generateGeminiContent, parseGeminiJson } from './geminiClient';
+
+const evaluationSchema = z.object({
+  total_score: z.number().min(0).max(100),
+  tier: z.enum(['Xuất sắc', 'Khá', 'Trung bình', 'Yếu']).optional(),
+  breakdown: z.object({
+    role_context: z.number().min(0).max(20),
+    task_clarity: z.number().min(0).max(25),
+    constraints: z.number().min(0).max(20),
+    output_format: z.number().min(0).max(20),
+    examples_specs: z.number().min(0).max(15)
+  }),
+  critique: z.object({ pros: z.array(z.string()), missing: z.array(z.string()) }),
+  improved_prompt: z.string()
+});
 
 export function calculateTier(score: number): QualityTier {
   if (score >= 90) return 'Xuất sắc';
@@ -465,6 +481,14 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 - Provide the complete solution in fenced code blocks with clear inline docstrings.
 - Add a brief 3-bullet explanation of key design choices.`;
 
+    case 'audio':
+      return `[ROLE]: Senior Music Producer and Sound Designer.
+[TASK]: Create an audio-generation prompt for: "${clean}"
+[MUSICAL SPECS]: Define genre, BPM, key, instrumentation, vocal texture, dynamics, and mix character.
+[STRUCTURE]: [Intro], [Verse], [Chorus], [Bridge], [Outro].
+[CONSTRAINTS]: Avoid clipping, muddy low-end, abrupt transitions, and unlicensed artist imitation.
+[OUTPUT FORMAT]: Return one production-ready audio prompt followed by a compact negative prompt.`;
+
     case 'research':
     default:
       return `[ROLE]: Senior Research Fellow and Strategic Analyst.
@@ -530,43 +554,12 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON với cấu trúc:
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
-
-  const payload = {
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { text: `${systemInstruction}\n\nĐÂY LÀ PROMPT CẦN ĐÁNH GIÁ VÀ TỐI ƯU:\n"""\n${prompt}\n"""` }
-        ]
-      }
-    ],
-    generationConfig: {
-      temperature: config.temperature ?? 0.2,
-      responseMimeType: 'application/json',
-    }
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const message = errorData?.error?.message || `Lỗi HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(message);
-  }
-
-  const data = await response.json();
-  const textContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!textContent) {
-    throw new Error('Gemini không trả về nội dung hợp lệ.');
-  }
-
-  const parsed = JSON.parse(textContent);
+  const generated = await generateGeminiContent(
+    `${systemInstruction}\n\nĐÂY LÀ PROMPT CẦN ĐÁNH GIÁ VÀ TỐI ƯU:\n<user_prompt>\n${prompt}\n</user_prompt>`,
+    config,
+    { responseMimeType: 'application/json', temperature: config.temperature ?? 0.2 }
+  );
+  const parsed = parseGeminiJson(generated.text, evaluationSchema);
 
   return {
     total_score: parsed.total_score,

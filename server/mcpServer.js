@@ -1,172 +1,67 @@
-import { getAllPrompts, getAllVersions, saveVersion } from './db.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import * as z from 'zod/v4';
+import { getAllVersions, saveVersion } from './db.js';
 import { FABRIC_PRESETS } from './presetsData.js';
 
-export const MCP_TOOLS = [
-  {
-    name: 'lprompt_evaluate',
-    description: 'Thẩm định chất lượng câu prompt theo thang đo 100 điểm chuẩn công nghiệp (5 trụ cột kỹ thuật: Role, Task, Constraints, Output Format, Specs)',
+export function evaluatePromptLocally(prompt) {
+  const text = String(prompt || '');
+  const signals = [
+    /\b(you are|act as|bạn là|vai trò)\b/i,
+    /\b(task|nhiệm vụ|mục tiêu|hãy)\b/i,
+    /\b(constraint|must|must not|không được|ràng buộc)\b/i,
+    /\b(json|markdown|output|định dạng|schema)\b/i,
+    /\b(example|ví dụ|context|ngữ cảnh|input)\b/i
+  ];
+  const score = Math.min(100, 25 + signals.filter((signal) => signal.test(text)).length * 15);
+  return { score, tier: score >= 90 ? 'Xuất sắc (Production)' : score >= 75 ? 'Khá' : 'Cần tối ưu', evaluatedPromptLength: text.length, method: 'deterministic-local-heuristic' };
+}
+
+export function createLPromptMcpServer() {
+  const server = new McpServer({ name: 'lprompt-service', version: '3.0.0' });
+  server.registerTool('lprompt_evaluate', {
+    description: 'Đánh giá nhanh cấu trúc prompt bằng heuristic cục bộ, không gọi mô hình AI.',
+    inputSchema: { prompt: z.string().min(1).max(100_000), domain: z.enum(['research', 'image', 'video', 'code', 'audio']).optional() }
+  }, async ({ prompt, domain }) => ({ content: [{ type: 'text', text: JSON.stringify({ ...evaluatePromptLocally(prompt), domain: domain || 'research' }, null, 2) }] }));
+
+  server.registerTool('lprompt_list_presets', {
+    description: 'Tìm mẫu prompt trong kho preset tích hợp.',
+    inputSchema: { category: z.enum(['all', 'business', 'engineering', 'copywriting', 'multimodal', 'research']).default('all'), search: z.string().max(200).default('') }
+  }, async ({ category, search }) => {
+    const query = search.trim().toLocaleLowerCase('vi');
+    const presets = FABRIC_PRESETS.filter((preset) => (category === 'all' || preset.category === category) && (!query || `${preset.title} ${preset.description}`.toLocaleLowerCase('vi').includes(query)));
+    return { content: [{ type: 'text', text: JSON.stringify({ count: presets.length, presets }, null, 2) }] };
+  });
+
+  server.registerTool('lprompt_get_versions', {
+    description: 'Lấy lịch sử commit prompt, có thể lọc theo nhánh.',
+    inputSchema: { branchName: z.string().min(1).max(100).optional() }
+  }, async ({ branchName }) => {
+    const versions = getAllVersions(branchName);
+    return { content: [{ type: 'text', text: JSON.stringify({ count: versions.length, versions }, null, 2) }] };
+  });
+
+  server.registerTool('lprompt_commit_version', {
+    description: 'Tạo một commit prompt có quan hệ cha và nhánh rõ ràng.',
     inputSchema: {
-      type: 'object',
-      properties: {
-        prompt: { type: 'string', description: 'Nội dung prompt cần thẩm định' },
-        domain: {
-          type: 'string',
-          enum: ['research', 'image', 'video', 'code', 'audio'],
-          description: 'Lĩnh vực của prompt'
-        }
-      },
-      required: ['prompt']
+      content: z.string().min(1).max(100_000), message: z.string().min(1).max(500),
+      stage: z.enum(['draft', 'testing', 'production']).default('draft'), branchName: z.string().min(1).max(100).default('main'),
+      parentId: z.string().max(200).optional(), mergeParentId: z.string().max(200).optional()
     }
-  },
-  {
-    name: 'lprompt_list_presets',
-    description: 'Lấy danh sách các mẫu prompt chuẩn Fabric-style trong kho presets (Kinh doanh, Lập trình, Copywriting, Video, Ảnh, Nghiên cứu)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          enum: ['all', 'business', 'engineering', 'copywriting', 'multimodal', 'research'],
-          description: 'Danh mục cần tìm'
-        },
-        search: { type: 'string', description: 'Từ khóa tìm kiếm' }
-      }
-    }
-  },
-  {
-    name: 'lprompt_get_versions',
-    description: 'Lấy danh sách các phiên bản prompt đã lưu trong cơ sở dữ liệu SQLite nhúng của LPrompt',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
-  },
-  {
-    name: 'lprompt_commit_version',
-    description: 'Lưu một phiên bản prompt mới vào cơ sở dữ liệu SQLite nhúng (Git-style versioning)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: 'Nội dung prompt' },
-        message: { type: 'string', description: 'Thông điệp thay đổi (commit message)' },
-        stage: {
-          type: 'string',
-          enum: ['draft', 'testing', 'production'],
-          description: 'Giai đoạn vòng đời'
-        }
-      },
-      required: ['content', 'message']
-    }
-  }
-];
+  }, async (input) => {
+    const version = saveVersion({ content: input.content, commitMessage: input.message, stage: input.stage, branchName: input.branchName, parentId: input.parentId, mergeParentId: input.mergeParentId });
+    return { content: [{ type: 'text', text: JSON.stringify({ success: true, version }, null, 2) }] };
+  });
+  return server;
+}
 
-export async function handleMcpJsonRpc(request) {
-  const { id, method, params } = request;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: {
-            name: 'lprompt-service',
-            version: '2.5.0',
-            description: 'LPrompt Universal PromptOps Embedded Background Service'
-          }
-        }
-      };
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: { tools: MCP_TOOLS }
-      };
-
-    case 'tools/call': {
-      const toolName = params?.name;
-      const args = params?.arguments || {};
-
-      try {
-        let resultData = null;
-
-        if (toolName === 'lprompt_list_presets') {
-          const cat = args.category || 'all';
-          const query = (args.search || '').toLowerCase();
-          const filtered = FABRIC_PRESETS.filter((p) => {
-            const matchesCat = cat === 'all' || p.category === cat;
-            const matchesQ = !query || p.title.toLowerCase().includes(query) || p.description.toLowerCase().includes(query);
-            return matchesCat && matchesQ;
-          });
-          resultData = { count: filtered.length, presets: filtered };
-        } else if (toolName === 'lprompt_get_versions') {
-          const versions = getAllVersions();
-          resultData = { count: versions.length, versions };
-        } else if (toolName === 'lprompt_commit_version') {
-          const verId = `ver-${Date.now()}`;
-          const currentCount = getAllVersions().length;
-          const newVer = {
-            id: verId,
-            version_number: `v1.${currentCount}`,
-            commit_message: args.message,
-            content: args.content,
-            stage: args.stage || 'draft',
-            created_at: new Date().toISOString()
-          };
-          saveVersion(newVer);
-          resultData = { success: true, version: newVer };
-        } else if (toolName === 'lprompt_evaluate') {
-          // Local heuristic evaluation
-          const prompt = args.prompt || '';
-          let score = 30;
-          if (/\[ROLE\]|Bạn là|You are/i.test(prompt)) score += 15;
-          if (/\[TASK\]|Nhiệm vụ|Steps/i.test(prompt)) score += 20;
-          if (/\[CONSTRAINTS\]|Không được|Do not/i.test(prompt)) score += 15;
-          if (/\[OUTPUT FORMAT\]|JSON|Markdown/i.test(prompt)) score += 15;
-          resultData = {
-            score: Math.min(score, 100),
-            tier: score >= 90 ? 'Xuất sắc (Production)' : score >= 75 ? 'Khá' : 'Cần tối ưu',
-            evaluatedPromptLength: prompt.length
-          };
-        } else {
-          throw new Error(`Tool "${toolName}" không được hỗ trợ.`);
-        }
-
-        return {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(resultData, null, 2)
-              }
-            ]
-          }
-        };
-      } catch (err) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32603,
-            message: err.message || 'Lỗi thực thi tool MCP'
-          }
-        };
-      }
-    }
-
-    default:
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: {
-          code: -32601,
-          message: `Phương thức "${method}" không tồn tại.`
-        }
-      };
-  }
+export async function handleMcpRequest(req, res) {
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  const server = createLPromptMcpServer();
+  res.on('close', () => {
+    transport.close().catch(() => undefined);
+    server.close().catch(() => undefined);
+  });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
 }

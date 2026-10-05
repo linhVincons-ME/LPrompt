@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { GeminiConfig } from '../types';
 import { X, Key, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { GEMINI_MODELS } from '../services/modelCatalog';
+import { generateGeminiContent } from '../services/geminiClient';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -29,20 +31,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, confi
     setErrorMessage('');
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Ping test. Reply with: OK' }] }]
-        })
-      });
-
-      if (!res.ok) {
-        const errorJson = await res.json().catch(() => ({}));
-        throw new Error(errorJson?.error?.message || `Lỗi HTTP ${res.status}`);
-      }
-
+      await generateGeminiContent('Ping test. Reply with exactly: OK', { apiKey, model, temperature, timeoutMs: 10000 });
       setTestStatus('success');
     } catch (err: any) {
       setTestStatus('error');
@@ -83,7 +72,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, confi
           <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start gap-2.5">
             <span className="text-base">💡</span>
             <div>
-              <span className="font-semibold">Mẹo sử dụng miễn phí 0đ:</span> Bạn có thể tạo API Key Gemini miễn phí (hạn mức 1.500 lượt/ngày với Gemini Flash) tại{' '}
+              <span className="font-semibold">Mẹo:</span> Bạn có thể tạo Gemini API Key tại{' '}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
@@ -108,60 +97,39 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, confi
               placeholder="AIzaSy..."
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-white font-mono text-xs"
             />
-            <p className="text-[11px] text-slate-500">API Key chỉ lưu cục bộ trong trình duyệt (localStorage), không gửi về bất kỳ máy chủ thứ ba nào.</p>
+            <p className="text-[11px] text-slate-500">API Key được lưu cục bộ và gửi trực tiếp từ trình duyệt tới Google Gemini API; LPrompt Service không lưu hoặc trung chuyển khóa.</p>
           </div>
 
           {/* Model Selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">Model Gemini Sử Dụng</label>
             <div className="grid grid-cols-1 gap-2">
-              <label
-                onClick={() => setModel('gemini-2.0-flash')}
-                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                  model === 'gemini-2.0-flash'
-                    ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                    : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="font-semibold text-xs flex items-center gap-2">
-                    <span>gemini-2.0-flash</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">Khuyên dùng (Free)</span>
+              {GEMINI_MODELS.map((availableModel) => (
+                <label
+                  key={availableModel.id}
+                  className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                    model === availableModel.id
+                      ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <div>
+                    <div className="font-semibold text-xs flex items-center gap-2">
+                      <span>{availableModel.id}</span>
+                      {availableModel.recommended && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">Khuyên dùng</span>}
+                      {availableModel.preview && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">Preview</span>}
+                    </div>
+                    <div className="text-[11px] text-slate-400">{availableModel.description}</div>
                   </div>
-                  <div className="text-[11px] text-slate-400">Siêu tốc độ (&lt;1s), chấm điểm và viết lại prompt xuất sắc</div>
-                </div>
-                <input
-                  type="radio"
-                  name="model"
-                  checked={model === 'gemini-2.0-flash'}
-                  onChange={() => setModel('gemini-2.0-flash')}
-                  className="accent-indigo-500"
-                />
-              </label>
-
-              <label
-                onClick={() => setModel('gemini-1.5-pro')}
-                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                  model === 'gemini-1.5-pro'
-                    ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                    : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="font-semibold text-xs flex items-center gap-2">
-                    <span>gemini-1.5-pro</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold">Chuyên sâu</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">Suy luận phức tạp nhất, giới hạn 50 req/ngày trên gói Free</div>
-                </div>
-                <input
-                  type="radio"
-                  name="model"
-                  checked={model === 'gemini-1.5-pro'}
-                  onChange={() => setModel('gemini-1.5-pro')}
-                  className="accent-indigo-500"
-                />
-              </label>
+                  <input
+                    type="radio"
+                    name="model"
+                    checked={model === availableModel.id}
+                    onChange={() => setModel(availableModel.id)}
+                    className="accent-indigo-500"
+                  />
+                </label>
+              ))}
             </div>
           </div>
 

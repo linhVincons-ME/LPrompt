@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import type { GeminiConfig, TestCase, BatchEvaluationSummary, AssertionType } from '../types';
 import { generateStarterTestCases, runBatchEvaluation } from '../services/batchEvaluator';
 import {
@@ -31,24 +31,23 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
   variables,
   config
 }) => {
-  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [testCases, setTestCases] = useState<TestCase[]>(() => generateStarterTestCases(variables));
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [summary, setSummary] = useState<BatchEvaluationSummary | null>(null);
   const [activeTab, setActiveTab] = useState<'matrix' | 'cases'>('cases');
-
-  // Initialize test cases whenever opened or variables change
-  useEffect(() => {
-    if (isOpen && testCases.length === 0) {
-      setTestCases(generateStarterTestCases(variables));
-    }
-  }, [isOpen, variables]);
+  const [runError, setRunError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   if (!isOpen) return null;
 
   const handleRunBatch = async () => {
     if (testCases.length === 0) return;
     setIsRunning(true);
+    setRunError(null);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setProgress({ current: 0, total: testCases.length });
 
     try {
@@ -56,16 +55,18 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
         promptTemplate,
         testCases,
         config,
-        (current, total) => setProgress({ current, total })
+        (current, total) => setProgress({ current, total }),
+        controller.signal
       );
       setSummary(res);
       setActiveTab('matrix');
     } catch (err) {
-      console.error('Batch run error:', err);
+      setRunError(err instanceof Error ? err.message : 'Batch evaluation thất bại.');
     } finally {
-      setIsRunning(false);
+      if (abortRef.current === controller) { abortRef.current = null; setIsRunning(false); }
     }
   };
+  const handleClose = () => { abortRef.current?.abort(); abortRef.current = null; setIsRunning(false); onClose(); };
 
   const handleAddTestCase = () => {
     const vars: Record<string, string> = {};
@@ -146,7 +147,7 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -410,13 +411,14 @@ export const BatchEvaluationModal: React.FC<BatchEvaluationModalProps> = ({
           )}
         </div>
 
+        {runError && <div className="mx-4 mb-2 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">{runError}</div>}
         {/* Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
           <span>
             {config.apiKey ? 'Chế độ: Gemini API Trực Tiếp' : 'Chế độ: Mô phỏng Offline không tốn phí'}
           </span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium transition-colors"
           >
             Đóng

@@ -1,4 +1,15 @@
 import type { PromptDomain, GeminiConfig } from '../types';
+import { z } from 'zod';
+import { generateGeminiContent, parseGeminiJson } from './geminiClient';
+
+const optimizationSchema = z.object({
+  improved_prompt: z.string().min(1),
+  original_score: z.number().min(0).max(100),
+  new_score: z.number().min(0).max(100),
+  changes_summary: z.array(z.string()).default([]),
+  framework_applied: z.string().default('CUSTOM'),
+  explanation: z.string().default('Đã tái cấu trúc prompt.')
+});
 
 export interface OptimizationResult {
   improved_prompt: string;
@@ -59,47 +70,19 @@ BẮT BUỘC TRẢ VỀ JSON theo schema sau:
 }
 `;
 
-    const modelToUse = config.model || 'gemini-1.5-pro';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${config.apiKey}`;
-
-    const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: `${systemPrompt}\n\nĐÂY LÀ PROMPT GỐC CẦN GEMINI PRO TỐI ƯU HÓA:\n"""\n${p}\n"""` }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: config.temperature ?? 0.2,
-        responseMimeType: 'application/json'
-      }
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Lỗi HTTP ${res.status}: ${res.statusText}`);
-    }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Gemini Pro không phản hồi kết quả hợp lệ.');
-
-    const parsed = JSON.parse(text);
+    const generated = await generateGeminiContent(
+      `${systemPrompt}\n\nĐÂY LÀ PROMPT GỐC CẦN TỐI ƯU HÓA:\n<user_prompt>\n${p}\n</user_prompt>`,
+      config,
+      { responseMimeType: 'application/json', temperature: config.temperature ?? 0.2 }
+    );
+    const parsed = parseGeminiJson(generated.text, optimizationSchema);
     return {
       improved_prompt: parsed.improved_prompt,
-      original_score: parsed.original_score || 45,
-      new_score: parsed.new_score || 98,
-      changes_summary: parsed.changes_summary || [],
+      original_score: parsed.original_score,
+      new_score: parsed.new_score,
+      changes_summary: parsed.changes_summary,
       framework_applied: parsed.framework_applied || framework,
-      explanation: parsed.explanation || 'Đã tái cấu trúc theo chuẩn PromptOps.'
+      explanation: parsed.explanation
     };
   }
 
