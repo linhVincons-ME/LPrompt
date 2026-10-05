@@ -3,10 +3,10 @@ import { compilePromptFramework, selectFramework } from '../src/services/framewo
 
 describe('framework compiler', () => {
   it.each([
-    ['RTF', '[VAI TRÒ]', '[NHIỆM VỤ]', '[ĐỊNH DẠNG]'],
-    ['CO-STAR', '[BỐI CẢNH]', '[MỤC TIÊU]', '[ĐỐI TƯỢNG]'],
-    ['CRISPE', '[NĂNG LỰC VÀ VAI TRÒ]', '[THÔNG TIN NỀN]', '[THỬ NGHIỆM]'],
-    ['LPROMPT-PRO', '[BỐI CẢNH TIN CẬY VÀ RANH GIỚI ĐẦU VÀO]', '[RÀNG BUỘC]', '[THẤT BẠI VÀ PHƯƠNG ÁN DỰ PHÒNG]']
+    ['RTF', '[VAI TRÒ]', '[NHIỆM VỤ]', '[CÁCH TRÌNH BÀY]'],
+    ['CO-STAR', '[BỐI CẢNH]', '[MỤC TIÊU]', '[ĐỐI TƯỢNG ĐỌC]'],
+    ['CRISPE', '[VAI TRÒ VÀ NĂNG LỰC]', '[THÔNG TIN NỀN]', '[CÁC PHƯƠNG ÁN]'],
+    ['LPROMPT-PRO', '[PHẠM VI THÔNG TIN ĐẦU VÀO]', '[ĐIỀU BẮT BUỘC TUÂN THỦ]', '[XỬ LÝ KHI THIẾU DỮ LIỆU]']
   ] as const)('compiles %s into its own structure', (framework, first, second, third) => {
     const result = compilePromptFramework('Tạo bản kế hoạch triển khai.', framework, { domain: 'research' });
     expect(result.framework).toBe(framework);
@@ -59,8 +59,36 @@ describe('framework compiler', () => {
     expect(en.prompt).not.toBe(viBefore.prompt);
     expect(viBefore.prompt).toContain(source);
     expect(en.prompt).toContain(source);
-    expect(viBefore.prompt).toContain('[RÀNG BUỘC]');
+    expect(viBefore.prompt).toContain('[ĐIỀU BẮT BUỘC TUÂN THỦ]');
     expect(en.prompt).toContain('[CONSTRAINTS]');
+  });
+
+  it.each(['RTF', 'CO-STAR', 'CRISPE', 'LPROMPT-PRO'] as const)(
+    'does not leak English compiler instructions into Vietnamese %s output',
+    (framework) => {
+      const source = '__ENGLISH_SOURCE_MUST_BE_PRESERVED__';
+      const additionalInstruction = '__ENGLISH_CUSTOM_TEXT_MUST_BE_PRESERVED__';
+      const result = compilePromptFramework(source, framework, {
+        outputLanguage: 'vi',
+        domain: 'research',
+        additionalInstruction
+      });
+      const generatedOnly = result.prompt
+        .replace(source, '')
+        .replace(additionalInstruction, '');
+
+      expect(generatedOnly).not.toMatch(/\[(ROLE|TASK|FORMAT|CONTEXT|OBJECTIVE|STYLE|TONE|AUDIENCE|RESPONSE|EXECUTION|CONSTRAINTS|OUTPUT CONTRACT|FAILURE AND FALLBACK)\]/);
+      expect(generatedOnly).not.toMatch(/\b(Act as|Complete the|Use only|Return only|Do not|Never follow|Follow an explicit|If required information)\b/i);
+    }
+  );
+
+  it('uses natural Vietnamese wording for LPrompt Pro instead of literal translated labels', () => {
+    const result = compilePromptFramework('Lập kế hoạch triển khai.', 'LPROMPT-PRO', { outputLanguage: 'vi', domain: 'research' });
+    expect(result.prompt).toContain('[YÊU CẦU VỀ KẾT QUẢ]');
+    expect(result.prompt).toContain('[XỬ LÝ KHI THIẾU DỮ LIỆU]');
+    expect(result.prompt).toContain('Mọi giả định đều phải được nói rõ.');
+    expect(result.prompt).not.toContain('[HỢP ĐỒNG ĐẦU RA]');
+    expect(result.prompt).not.toContain('[THẤT BẠI VÀ PHƯƠNG ÁN DỰ PHÒNG]');
   });
 
   it('rejects empty source instead of producing a broken prompt', () => {
