@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import type { PromptDomain, PromptEvaluation, GeminiConfig, SavedPrompt, PromptVersion, VersionStage } from './types';
+import type {
+  PromptDomain,
+  PromptEvaluation,
+  GeminiConfig,
+  SavedPrompt,
+  PromptVersion,
+  VersionStage,
+  FabricPreset
+} from './types';
 import { evaluatePromptLocally, evaluatePromptWithGemini } from './services/evaluator';
 import { SAMPLE_PROMPTS } from './data/samplePrompts';
 import { extractVariables, interpolateTemplate, getInitialVariableValues } from './utils/template';
@@ -16,6 +24,9 @@ import { CodeExportModal } from './components/CodeExportModal';
 import { VisualDiffModal } from './components/VisualDiffModal';
 import { RedTeamSecurityModal } from './components/RedTeamSecurityModal';
 import { VersionHistoryDrawer } from './components/VersionHistoryDrawer';
+import { FewShotSynthesizerModal } from './components/FewShotSynthesizerModal';
+import { BatchEvaluationModal } from './components/BatchEvaluationModal';
+import { PresetHubModal } from './components/PresetHubModal';
 import {
   Sparkles,
   Zap,
@@ -32,7 +43,9 @@ import {
   Share2,
   GitCompare,
   Shield,
-  History
+  History,
+  Target,
+  Layers
 } from 'lucide-react';
 
 const DEFAULT_CONFIG: GeminiConfig = {
@@ -71,6 +84,13 @@ export function App() {
   const [diffModified, setDiffModified] = useState<string>('');
   const [diffOriginalLabel, setDiffOriginalLabel] = useState<string>('Bản gốc');
   const [diffModifiedLabel, setDiffModifiedLabel] = useState<string>('Bản tối ưu');
+
+  // v2.0 Batch Evals, DSPy Few-Shot & Preset Hub Modals
+  const [isFewShotOpen, setIsFewShotOpen] = useState<boolean>(false);
+  const [fewShotTargetPrompt, setFewShotTargetPrompt] = useState<string>('');
+  const [isBatchEvalOpen, setIsBatchEvalOpen] = useState<boolean>(false);
+  const [batchEvalTargetPrompt, setBatchEvalTargetPrompt] = useState<string>('');
+  const [isPresetHubOpen, setIsPresetHubOpen] = useState<boolean>(false);
 
   // Config & Storage
   const [config, setConfig] = useState<GeminiConfig>(() => {
@@ -247,6 +267,22 @@ export function App() {
     setIsDiffModalOpen(true);
   };
 
+  // v2.0 Handlers
+  const handleOpenFewShotWith = (target?: string) => {
+    setFewShotTargetPrompt(target || evaluation?.improved_prompt || rawPrompt);
+    setIsFewShotOpen(true);
+  };
+
+  const handleOpenBatchEvalWith = (target?: string) => {
+    setBatchEvalTargetPrompt(target || evaluation?.improved_prompt || rawPrompt);
+    setIsBatchEvalOpen(true);
+  };
+
+  const handleSelectPreset = (preset: FabricPreset) => {
+    setRawPrompt(preset.prompt);
+    handleLocalEvaluate(preset.prompt);
+  };
+
   const currentSamples = SAMPLE_PROMPTS.filter((s) => s.domain === currentDomain);
 
   return (
@@ -267,6 +303,9 @@ export function App() {
         onOpenCodeExport={() => handleOpenCodeExportWith()}
         onOpenSecurityScan={() => setIsSecurityModalOpen(true)}
         onOpenVersionHistory={() => setIsVersionDrawerOpen(true)}
+        onOpenFewShot={() => handleOpenFewShotWith()}
+        onOpenBatchEval={() => handleOpenBatchEvalWith()}
+        onOpenPresetHub={() => setIsPresetHubOpen(true)}
         versionCount={versions.length}
         savedCount={savedPrompts.length}
       />
@@ -288,6 +327,8 @@ export function App() {
             onOpenPlayground={(p) => handleOpenPlaygroundWith(p)}
             onOpenCodeExport={(p) => handleOpenCodeExportWith(p)}
             onOpenVisualDiff={(orig, mod) => handleOpenVisualDiff(orig, mod, 'Prompt Gốc', 'Gemini Pro Tối Ưu')}
+            onOpenFewShot={(p) => handleOpenFewShotWith(p)}
+            onOpenBatchEval={(p) => handleOpenBatchEvalWith(p)}
           />
         ) : (
           /* VIEW 2: EVALUATOR & SCORING WORKSPACE */
@@ -455,6 +496,26 @@ export function App() {
                       <History className="w-3.5 h-3.5" />
                       <span>Phiên Bản ({versions.length})</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenFewShotWith(rawPrompt)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-bold transition-colors"
+                      title="Tự động sinh ví dụ mẫu Few-Shot (DSPy)"
+                    >
+                      <Target className="w-3.5 h-3.5" />
+                      <span>Few-Shot</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBatchEvalWith(rawPrompt)}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold transition-colors"
+                      title="Chạy kiểm thử hàng loạt Test Suite"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Batch Test</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -519,6 +580,24 @@ export function App() {
                       >
                         <GitCompare className="w-3.5 h-3.5 text-purple-400" />
                         <span>So sánh Diff</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenFewShotWith(evaluation.improved_prompt)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-purple-900/60 text-purple-300 hover:text-white text-xs font-medium transition-colors"
+                        title="Tự động sinh mẫu Few-Shot"
+                      >
+                        <Target className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Few-Shot</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenBatchEvalWith(evaluation.improved_prompt)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 hover:text-white text-xs font-medium transition-colors"
+                        title="Chạy Batch Test Suite"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Batch Test</span>
                       </button>
 
                       <button
@@ -675,6 +754,32 @@ export function App() {
           handleLocalEvaluate(text);
           setIsDiffModalOpen(false);
         }}
+      />
+
+      {/* v2.0 Modals: Few-Shot Synthesizer, Batch Evaluation, Preset Hub */}
+      <FewShotSynthesizerModal
+        isOpen={isFewShotOpen}
+        onClose={() => setIsFewShotOpen(false)}
+        prompt={fewShotTargetPrompt}
+        config={config}
+        onApplyIntegratedPrompt={(newPrompt) => {
+          setRawPrompt(newPrompt);
+          handleLocalEvaluate(newPrompt);
+        }}
+      />
+
+      <BatchEvaluationModal
+        isOpen={isBatchEvalOpen}
+        onClose={() => setIsBatchEvalOpen(false)}
+        promptTemplate={batchEvalTargetPrompt}
+        variables={extractVariables(batchEvalTargetPrompt)}
+        config={config}
+      />
+
+      <PresetHubModal
+        isOpen={isPresetHubOpen}
+        onClose={() => setIsPresetHubOpen(false)}
+        onSelectPreset={handleSelectPreset}
       />
     </div>
   );

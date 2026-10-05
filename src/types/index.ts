@@ -95,3 +95,59 @@ export interface DiffToken {
   type: 'added' | 'removed' | 'unchanged';
   value: string;
 }
+
+// ==========================================
+// V2.0 BATCH EVALS, DSPY FEW-SHOT & PRESET HUB
+// ==========================================
+
+export interface FewShotExample {
+  id: string;
+  input: string;
+  output: string;
+  explanation?: string;
+}
+
+export interface FewShotSynthesisResult {
+  examples: FewShotExample[];
+  integratedPrompt: string;
+}
+
+export type AssertionType = 'contains' | 'not_contains' | 'regex' | 'min_length';
+
+export interface TestCase {
+  id: string;
+  name: string;
+  variables: Record<string, string>;
+  assertionType: AssertionType;
+  expectedValue: string;
+}
+
+export interface TestCaseRunResult {
+  testCaseId: string;
+  testCaseName: string;
+  status: 'pass' | 'fail' | 'error';
+  actualOutput: string;
+  latencyMs: number;
+  tokensUsed?: number;
+  reason?: string;
+}
+
+export interface BatchEvaluationSummary {
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  passRate: number; // 0 - 100
+  avgLatencyMs: number;
+  results: TestCaseRunResult[];
+}
+
+export interface FabricPreset {
+  id: string;
+  title: string;
+  category: 'business' | 'engineering' | 'copywriting' | 'multimodal' | 'research';
+  description: string;
+  prompt: string;
+  framework: string;
+  tags: string[];
+  recommendedModel?: string;
+}

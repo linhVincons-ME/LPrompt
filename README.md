@@ -1,9 +1,12 @@
 # 🚀 LPrompt Studio - Universal Prompt Engineering & PromptOps IDE
 
-> **LPrompt Studio** là nền tảng máy bàn và web chuyên nghiệp dành cho kỹ sư Prompt (Prompt Engineer) và lập trình viên AI. Ứng dụng tích hợp bộ máy thẩm định điểm số chuẩn 100 điểm song ngữ (Việt - Anh), phân tích thiếu sót kỹ thuật, **phân hệ chuyên biệt đưa sang Google Gemini Pro để tối ưu hóa toàn diện prompt lên chuẩn Production-Ready (95 - 100 điểm)**, cùng bộ công cụ PromptOps toàn diện: **Live Playground, Template Engine, Multi-SDK Exporter (v1.1)** và **Git-Style Versioning, Visual Diff Highlighter, Red-Teaming Security Scanner (v1.2)**.
+> **LPrompt Studio** là nền tảng máy bàn và web chuyên nghiệp dành cho kỹ sư Prompt (Prompt Engineer) và lập trình viên AI. Ứng dụng tích hợp bộ máy thẩm định điểm số chuẩn 100 điểm song ngữ (Việt - Anh), phân tích thiếu sót kỹ thuật, **phân hệ chuyên biệt đưa sang Google Gemini Pro để tối ưu hóa toàn diện prompt lên chuẩn Production-Ready (95 - 100 điểm)**, cùng bộ công cụ PromptOps toàn diện:
+> - **v2.0 (Mới nhất):** Batch Evaluation & Test Suite Matrix (chuẩn promptfoo/Langfuse), DSPy-style Auto Few-Shot Synthesizer, Fabric-Style Presets Hub.
+> - **v1.2:** Git-Style Versioning & 1-Click Rollback, Word-Level Visual Diff Highlighter, Red-Teaming Security Scanner (OWASP LLM Top 10) & Auto-Patch Guardrails.
+> - **v1.1:** Live Execution Playground, Template Engine `{{variable}}`, Multi-SDK 1-Click Exporter (Python, TypeScript, cURL, JSON).
 
 ![LPrompt Studio Banner](https://img.shields.io/badge/Status-Production--Ready-emerald?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-v1.2_PromptOps_%26_Security-indigo?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v2.0_Batch_Evals_%26_Few--Shot-indigo?style=for-the-badge)
 ![AI Engine](https://img.shields.io/badge/AI_Engine-Google_Gemini_Pro_%2F_Flash-4285F4?style=for-the-badge&logo=google)
 ![React 19](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss)
@@ -11,123 +14,83 @@
 
 ---
 
-## 🌟 Tính Năng Đột Phá Trong Phiên Bản v1.2
+## 🌟 Tính Năng Đột Phá Trong Phiên Bản v2.0
 
-### 1. Git-Style Version Control & 1-Click Rollback (Quản Lý Phiên Bản Prompt)
-* **Quản Lý Vòng Đời Prompt Chuyên Nghiệp:** Ghi lại từng bước phát triển của prompt theo chuẩn công nghiệp (`v1.0`, `v1.1`, `v1.2`...).
-* **Phân Tầng Giai Đoạn (Lifecycle Stages):**
-  * 📝 **Draft (Nháp):** Đang trong giai đoạn phát triển ý tưởng ban đầu.
-  * 🧪 **Testing (Thử nghiệm):** Đang chạy A/B test hoặc đánh giá benchmark.
-  * 🚀 **Production (Chạy thật):** Phiên bản đạt chuẩn chất lượng cao nhất đã được duyệt triển khai.
-* **Commit Message & Điểm Số:** Lưu trữ thông điệp mô tả thay đổi cùng điểm số chất lượng tại thời điểm commit.
-* **1-Click Rollback:** Phục hồi tức thì nội dung bất kỳ phiên bản nào trong quá khứ mà không làm mất lịch sử các phiên bản khác.
+### 1. Batch Evaluation & Test Suite Matrix (Kiểm Thử Hàng Loạt Chuẩn promptfoo / Langfuse)
+* **Kiểm Thử Định Lượng Nhiều Trường Hợp Cùng Lúc:** Không chỉ test 1 trường hợp đơn lẻ, bạn có thể thiết lập tập dữ liệu (Dataset Matrix) gồm nhiều bộ biến `{{variable}}` khác nhau.
+* **4 Quy Tắc Thẩm Định (Assertion Rules):**
+  * 🔤 **Contains:** Kiểm tra kết quả có chứa từ khóa hoặc cấu trúc kỳ vọng.
+  * 🚫 **Not Contains:** Kiểm tra kết quả không vi phạm điều cấm (ví dụ: không chứa từ chối, không suy diễn).
+  * 🧩 **Regex:** Khớp biểu thức chính quy phức tạp (ví dụ: kiểm tra định dạng email, mã code, cú pháp Markdown).
+  * 📏 **Min Length:** Đảm bảo độ sâu chi tiết của câu trả lời đạt số ký tự tối thiểu.
+* **Bảng Ma Trận & Thống Kê Công Nghiệp:**
+  * 📊 **Tỷ lệ vượt qua (Pass Rate %):** Đánh giá độ ổn định của prompt trên quy mô lớn.
+  * ⚡ **Độ trễ trung bình (Avg Latency ms):** Đo lường hiệu năng phản hồi trên từng case.
+  * 📑 **Bảng kết quả chi tiết:** Trạng thái ✅ PASS / ❌ FAIL, lý do chi tiết và nội dung AI trả về thực tế.
+  * 💾 **1-Click Xuất Báo Cáo:** Xuất toàn bộ kết quả ra file JSON phục vụ lưu trữ hoặc tích hợp CI/CD.
 
-### 2. Visual Diff Highlighter (So Sánh Trực Quan Thay Đổi Mức Độ Từ Ngữ)
-* **Thuật Toán LCS (Longest Common Subsequence):** Phân tích chi tiết sự khác biệt từng từ giữa 2 văn bản prompt.
-* **Hiển Thị Trực Quan Sinh Động:**
-  * 🟢 **Màu xanh lục (`+`):** Các từ ngữ hoặc cấu trúc được bổ sung mới.
-  * 🔴 **Màu đỏ gạch ngang (`-`):** Các từ ngữ đã bị lược bỏ hoặc thay thế.
-  * ⚪ **Màu xám:** Các phần giữ nguyên không đổi.
-* **2 Chế Độ Xem Linh Hoạt:**
-  * **Inline Diff:** Xem liền mạch với các thẻ highlight trực tiếp trong dòng văn bản.
-  * **Side-by-Side Split View:** Xem đối chiếu hai cột song song (Bản cũ vs Bản mới).
-* **Ứng Dụng Đa Dạng:**
-  * So sánh Prompt Gốc vs Prompt do Gemini Pro nâng cấp (95–100đ).
-  * So sánh giữa 2 phiên bản bất kỳ trong lịch sử commit.
+### 2. DSPy-Style Auto Few-Shot Synthesizer (Tự Động Sinh Cặp Mẫu Vàng)
+* **Tổng Hợp Mẫu Vàng Tự Động:** Dựa trên nguyên lý của thư viện Stanford DSPy, Gemini Pro tự động phân tích nhiệm vụ và các biến trong prompt để tạo ra 2–3 cặp Input/Output mẫu chất lượng cao (Golden Examples).
+* **Grounding & Triệt Tiêu Ảo Giác:** Các ví dụ Few-Shot giúp mô hình AI hiểu sâu sắc schema đầu ra, phong cách lập luận và các điều kiện biên (Edge Cases).
+* **Tùy Biến Linh Hoạt & 1-Click Tích Hợp:** Cho phép chỉnh sửa từng cặp Input/Output và nhấp nút **"Gắn Few-Shot Vào Prompt"** để tự động đạt điểm tuyệt đối 15/15đ cho trụ cột C5 (`[EXAMPLES & SPECS]`).
 
-### 3. Red-Teaming Security Scanner & Auto-Patch Guardrails (Thẩm Định An Toàn OWASP LLM Top 10)
-* **Quét Lỗ Hổng Bảo Mật Toàn Diện:** Kiểm tra 4 nhóm rủi ro nghiêm trọng theo tiêu chuẩn an toàn AI:
-  * 🛡️ **Prompt Injection & Jailbreak:** Ngăn chặn người dùng nhập lệnh phá vỡ rào chắn (`"Ignore previous instructions"`...).
-  * 🔒 **System Prompt Leakage:** Ngăn chặn việc ép mô hình tiết lộ hướng dẫn nội bộ hoặc dữ liệu mật.
-  * 🚫 **Hallucination & Grounding:** Ép buộc mô hình chỉ trả lời dựa trên sự thật và thừa nhận khi không có thông tin.
-  * 🎭 **Persona Override:** Chống lại các nỗ lực ép đổi danh tính ngoài phạm vi đã quy định.
-* **Chỉ Số An Toàn Safety Score (0 - 100đ):** Cảnh báo mức độ rủi ro trực quan (*An toàn / Rủi ro trung bình / Nguy cơ cao*).
-* **1-Click Auto-Patch Guardrails:** Tự động chèn các khối rào chắn kỹ thuật kiên cố vào cuối prompt để chống chọi tức thì với các đòn tấn công phổ biến.
+### 3. Fabric-Style Presets Hub (Kho Mẫu Chuyên Sâu Tích Hợp Sẵn)
+* **Kho Mẫu Chuẩn Quốc Tế:** Lấy cảm hứng từ triết lý mẫu của Daniel Miessler Fabric và Awesome-Prompts, tích hợp sẵn các prompt giải quyết bài toán phức tạp trong thực tế:
+  * 📊 **Kinh Doanh & Chiến Lược:** Phân tích SWOT & Ma trận TOWS, Điều tra nguyên nhân gốc rễ 5-Whys, OKR Breakdown.
+  * 💻 **Kỹ Thuật & Code:** Thẩm tra an toàn mã nguồn (OWASP Security Audit), Tái cấu trúc Clean Architecture & SOLID, OpenAPI Spec Generator.
+  * ✍️ **Copywriting & Marketing:** Chuỗi Cold Email B2B tỷ lệ mở 60%+, Kịch bản High-Converting Landing Page, SEO Content Pillar.
+  * 🎨 **Đa Phương Thức:** Prompt Midjourney v6/Flux siêu thực đầy đủ lens máy ảnh và ánh sáng, Prompt chỉ đạo camera video Sora/Kling/Runway Gen-3.
+  * 🔬 **Nghiên Cứu & Học Thuật:** Phản biện bài báo khoa học (Academic Paper Critique), Phân tích bằng sáng chế.
+* **Bộ Lọc Đa Năng & 1-Click Tải:** Tìm kiếm theo từ khóa, lọc theo danh mục, xem trước prompt và đưa thẳng vào Workspace để tối ưu hoặc chạy thử.
 
 ---
 
-## 🚀 Tính Năng Mới Trong Phiên Bản v1.1
+## 🛡️ Tính Năng v1.2 (PromptOps, Versioning & Security)
 
-### 4. Live Execution Playground (Chạy Thử Nghiệm Prompt Thực Tế)
-* **Thực thi 1-Click Trực Tiếp:** Gửi prompt đã tối ưu hoặc prompt ban đầu vào Gemini API để nhận phản hồi thực tế ngay trong ứng dụng.
-* **Đo lường Chỉ Số Công Nghiệp:**
-  * ⚡ **Độ trễ phản hồi (Latency):** Tính chính xác bằng mili-giây (ms).
-  * 🔢 **Thống kê Token:** Bóc tách rõ ràng Input Tokens, Output Tokens và Total Tokens.
-  * 💵 **Ước tính Chi Phí:** Tính toán tức thì chi phí theo USD ($) trên từng lượt gọi.
-* **Hỗ trợ Offline Simulation:** Nếu chưa có API Key, hệ thống tự kích hoạt chế độ mô phỏng thông minh để trải nghiệm giao diện hoàn toàn miễn phí.
+### 4. Git-Style Version Control & 1-Click Rollback
+* **Quản Lý Vòng Đời Prompt:** Đánh số phiên bản (`v1.0`, `v1.1`, `v2.0`...) kèm commit message, điểm số chất lượng và timestamp.
+* **Phân Tầng Giai Đoạn:** 📝 Draft (Nháp) ➔ 🧪 Testing (Thử nghiệm) ➔ 🚀 Production (Chạy thật).
+* **1-Click Rollback:** Phục hồi tức thì nội dung bất kỳ phiên bản nào trong quá khứ mà không làm mất lịch sử các phiên bản khác.
 
-### 5. Bộ Xử Lý Biến Động & Template Engine (`{{variable}}`)
-* **Tự Động Phát Hiện Biến:** Tự động quét cú pháp `{{ten_bien}}` trong prompt và sinh form nhập liệu trực quan.
-* **Nút Chèn Biến Nhanh:** Cho phép tạo và chèn biến động vào bất kỳ vị trí nào trong prompt chỉ với 1 click.
-* **Nội Suy Giá Trị Thời Gian Thực:** Tự động thay thế giá trị biến vào prompt trước khi thực thi hoặc xuất mã nguồn.
+### 5. Visual Diff Highlighter (So Sánh Trực Quan Từng Từ)
+* **Thuật Toán LCS:** Đánh dấu rõ ràng thêm mới (`+` xanh lục) và xóa bỏ (`-` đỏ gạch ngang).
+* **2 Chế Độ Xem:** Inline Diff (dòng liên tục) và Side-by-Side Split View (hai cột song song).
 
-### 6. Xuất Mã Nguồn SDK 1-Click (Code Exporter)
-* Chuyển đổi prompt chuẩn 95-100 điểm thành mã nguồn hoàn chỉnh sẵn sàng chạy cho các dự án:
-  * 🐍 **Python:** Sử dụng SDK mới nhất của Google (`google-genai`).
-  * 🔷 **TypeScript / Node.js:** Sử dụng thư viện chuẩn `@google/genai`.
-  * 💻 **cURL:** Lệnh gọi HTTP REST API trực tiếp cho terminal và Postman.
-  * 📄 **JSON Spec:** Chuẩn cấu trúc PromptOps lưu trữ và tích hợp CI/CD.
-* **Tùy chọn linh hoạt:** Cho phép xuất code giữ nguyên cú pháp mẫu `{{var}}` hoặc điền sẵn giá trị thực tế.
+### 6. Red-Teaming Security Scanner & Auto-Patch Guardrails
+* **Thẩm định an toàn OWASP LLM Top 10:** Quét Prompt Injection, System Prompt Leakage, Hallucination và Persona Override.
+* **1-Click Auto-Patch Guardrails:** Tự động chèn các rào chắn kỹ thuật kiên cố vào cuối prompt để chống chọi tức thì với các đòn tấn công.
+
+---
+
+## ⚡ Tính Năng v1.1 (Playground, Template & Code Exporter)
+
+### 7. Live Execution Playground
+* Chạy thử prompt thực tế qua Gemini API; đo lường chính xác độ trễ (Latency ms), thống kê Token (Input/Output/Total) và ước tính chi phí USD ($).
+
+### 8. Bộ Xử Lý Biến Động & Template Engine (`{{variable}}`)
+* Tự động quét cú pháp `{{ten_bien}}`, sinh form nhập liệu trực quan và nội suy thời gian thực khi chạy thử nghiệm hoặc xuất code.
+
+### 9. Xuất Mã Nguồn SDK 1-Click
+* Chuyển đổi prompt thành mã nguồn hoàn chỉnh: 🐍 **Python** (`google-genai`), 🔷 **TypeScript** (`@google/genai`), 💻 **cURL**, 📄 **JSON Spec**.
 
 ---
 
 ## 💎 Các Tính Năng Cốt Lõi Khác
 
-### 7. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
-* **Gửi Sang Gemini Pro Để Chỉnh Sửa:** Đưa prompt thô ban đầu sang Gemini Pro để phân tích ngữ nghĩa sâu và tái cấu trúc thành prompt chuẩn công nghiệp.
-* **Bộ Chọn Mục Tiêu Tối Ưu (Optimization Goals):**
-  * 🚀 *Chuẩn Production (95–100đ):* Tự động bổ sung đầy đủ 5 trụ cột kỹ thuật.
-  * 🛡️ *Thêm Rào Chắn Lỗi (Negative Rules & Guardrails):* Triệt tiêu ảo giác, chống suy diễn sai lệch.
-  * 📐 *Ép Schema Đầu Ra (Strict JSON / Markdown Bảng):* Định dạng chuẩn cho lập trình và trích xuất dữ liệu.
-  * 🔬 *Tư Duy Logic Từng Bước (CoT Reasoning):* Phân rã bài toán phức tạp theo từng pha.
-  * 🎨 *Tối Ưu Tham Số Chuyên Ngành:* Ánh sáng, lens máy ảnh, góc quay video, tech stack code.
-* **4 Khung Prompt Chuẩn Quốc Tế:** `CO-STAR`, `CRISPE`, `RTF`, `STANDARD-PRO`.
-* **Chỉ Thị Tùy Biến Bổ Sung:** Người dùng có thể yêu cầu riêng cho Gemini Pro (ví dụ: *"Dịch sang tiếng Anh chuẩn Oxford", "Thêm ví dụ JSON thực tế", "Rút gọn dưới 150 từ"*).
-* **Bảng So Sánh Đối Chiếu Song Song (Split Comparison View):** Đối chiếu trực quan giữa **Bản Gốc (Điểm cũ)** và **Bản Đã Sửa Đổi (Điểm mới 95–100đ)**.
-* **Báo Cáo Tinh Chỉnh (Audit Log):** Giải thích chi tiết các yếu tố đã thêm/sửa và nguyên nhân tại sao bản mới giúp AI phản hồi chính xác hơn 300%.
+### 10. Phân Hệ Tối Ưu Hóa Chuyên Biệt Với Gemini Pro (Optimizer Studio)
+* Đưa prompt thô ban đầu sang Gemini Pro để phân tích ngữ nghĩa sâu và tái cấu trúc thành prompt chuẩn công nghiệp.
+* Bộ chọn mục tiêu: Production 100đ, Negative Guardrails, Strict JSON Schema, CoT Reasoning, Tham số chuyên ngành.
+* 4 Khung Kỹ thuật: `CO-STAR`, `CRISPE`, `RTF`, `STANDARD-PRO`.
 
----
-
-### 8. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ (Bilingual Scoring Rubric)
-Bộ thẩm định hỗ trợ toàn diện **Tiếng Việt, Tiếng Anh và Thẻ tiền tố Kỹ thuật (`[ROLE]`, `[TASK]`, `[CONSTRAINTS]`, `[OUTPUT FORMAT]`, `[PARAMETERS]`)**:
-
+### 11. Bộ Quy Tắc Chấm Điểm 100 Điểm Song Ngữ (Bilingual Scoring Rubric)
 ```
 [Tổng điểm: 100]
 ├── C1: [ROLE & CONTEXT] - Vai trò & Ngữ cảnh (20đ)
-│   ├── Nhận diện: [ROLE], [PERSONA], "Bạn là...", "You are...", "Act as Senior...", bối cảnh bài toán.
 ├── C2: [TASK & INSTRUCTION] - Nhiệm vụ & Chỉ dẫn thực thi (25đ)
-│   ├── Nhận diện: [TASK], [STEPS], động từ hành động ("Implement", "Analyze", "Viết..."), các bước 1, 2.
 ├── C3: [CONSTRAINTS & RULES] - Ràng buộc & Điều cấm kỵ (20đ)
-│   ├── Nhận diện: [NEGATIVE PROMPT], [CONSTRAINTS], "Do not", "Không được", "lowres", "bad anatomy"...
 ├── C4: [OUTPUT FORMAT] - Định dạng đầu ra mong muốn (20đ)
-│   ├── Nhận diện: [OUTPUT FORMAT], [SCHEMA], JSON, Markdown table, Code block, "Only return", "Không chào hỏi"...
 └── C5: [EXAMPLES & SPECS] - Ví dụ mẫu & Tham số chuyên ngành (15đ)
-    └── Nhận diện: Few-shot samples, lens 85mm, lighting, --ar 16:9, fps, python 3.12, clean architecture, [Verse].
 ```
-
-#### Bảng Xếp Hạng Chất Lượng:
-| Khoảng điểm | Phân cấp | Màu sắc | Đánh giá & Khả năng vận hành |
-| :--- | :--- | :--- | :--- |
-| **90 - 100** | **Xuất sắc (Production-Ready)** | 🟢 Xanh lục | Đầy đủ vai trò, ngữ cảnh, ràng buộc, cấu trúc output. AI chạy chuẩn xác ngay lượt đầu. |
-| **75 - 89** | **Khá (Good / Refinable)** | 🔵 Xanh dương | Khá rõ ràng, chỉ thiếu 1-2 yếu tố nhỏ (ví dụ vài quy tắc cấm kỵ hoặc ví dụ mẫu). |
-| **50 - 74** | **Trung bình (Fair / Needs Work)** | 🟡 Vàng cam | Còn chung chung, AI dễ suy diễn lan man hoặc trả lời thừa thãi. |
-| **Dưới 50** | **Yếu (Poor / Ambiguous)** | 🔴 Đỏ | Mơ hồ, thiếu định hướng kỹ thuật nghiêm trọng. |
-
----
-
-### 9. Hỗ Trợ 5 Phân Hệ Đa Phương Thức (Multimodal Prompting)
-- 🧠 **Nghiên Cứu & LLM:** Lập luận chuyên sâu, khung phân tích SWOT/Rủi ro, Mermaid diagrams.
-- 🎨 **Tạo Ảnh (Flux / Midjourney / SD):** Bảng chọn tỷ lệ ảnh (`16:9`, `1:1`, `9:16`, `21:9`), Lens tiêu cự, Ánh sáng Cinematic, nút chèn khung Negative Prompt 1-Click.
-- 🎬 **Tạo Video (Sora / Kling / Runway Gen-3 / Luma):** Chuyển động camera (Dolly, Pan, Tilt, FPV), Motion speed slider, 60fps 4K specs.
-- 💻 **Lập Trình & Code:** Hỗ trợ Python 3.12, TypeScript, Go, Rust; tích hợp yêu cầu Clean Architecture, Pydantic V2, Pytest/Jest.
-- 🎵 **Âm Thanh & Nhạc (Suno / Udio):** Thẻ cấu trúc bài hát `[Verse]`, `[Chorus]`, `[Guitar Solo]`, nhịp BPM, thể loại nhạc.
-
----
-
-### 10. Khởi Chạy 1-Click Tiện Lợi (Windows Desktop & Batch)
-* **Khởi chạy từ Desktop:** Nhấp đúp chuột vào biểu tượng **`LPrompt Studio`** trên màn hình chính Desktop.
-* **Khởi chạy từ thư mục:** Chạy file [`Run_LPrompt.bat`](Run_LPrompt.bat).
-* 👉 Script tự động kiểm tra thư viện `npm install`, khởi động dev server và **tự động mở trình duyệt** tại `http://localhost:5173`.
 
 ---
 

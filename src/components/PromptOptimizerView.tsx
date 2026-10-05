@@ -15,7 +15,9 @@ import {
   AlertCircle,
   Play,
   Share2,
-  GitCompare
+  GitCompare,
+  Target,
+  Layers
 } from 'lucide-react';
 
 interface PromptOptimizerViewProps {
@@ -27,6 +29,8 @@ interface PromptOptimizerViewProps {
   onOpenPlayground: (prompt: string) => void;
   onOpenCodeExport: (prompt: string) => void;
   onOpenVisualDiff?: (original: string, modified: string) => void;
+  onOpenFewShot?: (prompt: string) => void;
+  onOpenBatchEval?: (prompt: string) => void;
 }
 
 export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
@@ -37,7 +41,9 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   onOpenApiKeyModal,
   onOpenPlayground,
   onOpenCodeExport,
-  onOpenVisualDiff
+  onOpenVisualDiff,
+  onOpenFewShot,
+  onOpenBatchEval
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
   const [selectedGoal, setSelectedGoal] = useState('production_100');
@@ -340,6 +346,26 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
                     >
                       <GitCompare className="w-3 h-3 text-purple-400" />
                       <span>So sánh Diff</span>
+                    </button>
+                  )}
+                  {onOpenFewShot && (
+                    <button
+                      onClick={() => onOpenFewShot(optimizationResult.improved_prompt)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-purple-900/60 text-purple-300 text-xs font-medium transition-all"
+                      title="Tự động sinh mẫu Few-Shot Input/Output"
+                    >
+                      <Target className="w-3 h-3 text-purple-400" />
+                      <span>Few-Shot</span>
+                    </button>
+                  )}
+                  {onOpenBatchEval && (
+                    <button
+                      onClick={() => onOpenBatchEval(optimizationResult.improved_prompt)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 text-xs font-medium transition-all"
+                      title="Chạy Batch Test Suite cho bản này"
+                    >
+                      <Layers className="w-3 h-3 text-indigo-400" />
+                      <span>Batch Test</span>
                     </button>
                   )}
                 </div>

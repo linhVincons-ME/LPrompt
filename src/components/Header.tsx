@@ -14,7 +14,10 @@ import {
   Play,
   Share2,
   Shield,
-  History
+  History,
+  Target,
+  Layers,
+  Compass
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -28,6 +31,9 @@ interface HeaderProps {
   onOpenCodeExport: () => void;
   onOpenSecurityScan: () => void;
   onOpenVersionHistory: () => void;
+  onOpenFewShot?: () => void;
+  onOpenBatchEval?: () => void;
+  onOpenPresetHub?: () => void;
   versionCount: number;
   savedCount: number;
 }
@@ -43,6 +49,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCodeExport,
   onOpenSecurityScan,
   onOpenVersionHistory,
+  onOpenFewShot,
+  onOpenBatchEval,
+  onOpenPresetHub,
   versionCount,
   savedCount
 }) => {
@@ -112,6 +121,42 @@ export const Header: React.FC<HeaderProps> = ({
             <Shield className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Bảo Mật</span>
           </button>
+
+          {/* Preset Hub Button */}
+          {onOpenPresetHub && (
+            <button
+              onClick={onOpenPresetHub}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-xs font-bold text-teal-300 transition-colors shadow-sm"
+              title="Kho Prompt Chuyên Sâu Fabric-style"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Presets</span>
+            </button>
+          )}
+
+          {/* Batch Evaluation Button */}
+          {onOpenBatchEval && (
+            <button
+              onClick={onOpenBatchEval}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-bold text-indigo-300 transition-colors shadow-sm"
+              title="Chạy kiểm thử hàng loạt Test Suite Matrix"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Batch Evals</span>
+            </button>
+          )}
+
+          {/* DSPy Few-Shot Synthesizer Button */}
+          {onOpenFewShot && (
+            <button
+              onClick={onOpenFewShot}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-xs font-bold text-purple-300 transition-colors shadow-sm"
+              title="Tự động sinh ví dụ mẫu Few-Shot (DSPy)"
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Few-Shot</span>
+            </button>
+          )}
 
           {/* Versions History Button */}
           <button
