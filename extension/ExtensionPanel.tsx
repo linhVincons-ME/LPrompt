@@ -12,7 +12,10 @@ import {
   Image as ImageIcon,
   RotateCcw,
   Send,
-  Sparkles
+  Sparkles,
+  Upload,
+  Users,
+  X
 } from 'lucide-react';
 import type { PromptDomain } from '../src/types';
 import { evaluatePromptLocally } from '../src/services/evaluator';
@@ -23,6 +26,9 @@ import {
 } from '../src/services/frameworkCompiler';
 import {
   compileConstructionPrompt,
+  CONSTRUCTION_CREW_OPTIONS,
+  inspectConstructionAdditionalRequirements,
+  type ConstructionCrewPreset,
   type ConstructionOutputType,
   type ConstructionPromptResult
 } from '../src/services/constructionPromptCompiler';
@@ -42,6 +48,8 @@ interface StoredConstructionDraft {
   outputType: ConstructionOutputType;
   aspectRatio: '9:16' | '16:9' | '1:1';
   durationSeconds: number;
+  participantCount: number;
+  crewPreset?: ConstructionCrewPreset;
   referenceAssets: string;
   additionalRequirements: string;
 }
@@ -60,6 +68,13 @@ interface GeminiResponse {
   text?: string;
   error?: string;
   transientFailure?: TransientFailure;
+  warning?: string;
+}
+
+interface GeminiAttachment {
+  name: string;
+  type: string;
+  dataUrl: string;
 }
 
 const STORAGE_KEYS = {
@@ -73,7 +88,15 @@ const STORAGE_KEYS = {
 
 const SAMPLE_CONSTRUCTION_CONTEXT = 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu.';
 const SAMPLE_CONSTRUCTION_DIALOGUE = 'Hướng dẫn nghiệm thu dây cáp điện hạ tầng, các bước triển khai sẽ diễn ra như sau.';
-const DEFAULT_CONSTRUCTION_REFERENCES = 'AoCBCNDLogo.JPG, Mu_KTHT.PNG, reference_sheet.PNG';
+const MAX_REFERENCE_FILES = 4;
+const MAX_REFERENCE_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_REFERENCE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+function mergeReferenceFiles(current: File[], incoming: File[]): File[] {
+  const files = new Map(current.map((file) => [`${file.name}-${file.size}-${file.lastModified}`, file]));
+  incoming.forEach((file) => files.set(`${file.name}-${file.size}-${file.lastModified}`, file));
+  return [...files.values()];
+}
 
 const DOMAINS: Array<{ id: PromptDomain; label: string }> = [
   { id: 'research', label: 'Nghiên cứu' },
@@ -90,6 +113,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
       (value) => { clearTimeout(timer); resolve(value); },
       (error: unknown) => { clearTimeout(timer); reject(error); }
     );
+  });
+}
+
+function fileToAttachment(file: File): Promise<GeminiAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Không đọc được ảnh ${file.name}.`));
+    reader.onload = () => resolve({ name: file.name, type: file.type, dataUrl: String(reader.result) });
+    reader.readAsDataURL(file);
   });
 }
 
@@ -139,7 +171,10 @@ export function ExtensionPanel() {
   const [constructionOutputType, setConstructionOutputType] = useState<ConstructionOutputType>('image');
   const [constructionAspectRatio, setConstructionAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [constructionDuration, setConstructionDuration] = useState(8);
+  const [constructionCrewPreset, setConstructionCrewPreset] = useState<ConstructionCrewPreset>('ktht');
   const [constructionReferences, setConstructionReferences] = useState('');
+  const [constructionReferenceFiles, setConstructionReferenceFiles] = useState<File[]>([]);
+  const [isConstructionReferenceDragActive, setIsConstructionReferenceDragActive] = useState(false);
   const [constructionAdditional, setConstructionAdditional] = useState('');
   const [constructionCompiled, setConstructionCompiled] = useState<ConstructionPromptResult | null>(null);
   const [constructionCopied, setConstructionCopied] = useState(false);
@@ -167,6 +202,7 @@ export function ExtensionPanel() {
         setConstructionOutputType(construction.outputType ?? 'image');
         setConstructionAspectRatio(construction.aspectRatio ?? '9:16');
         setConstructionDuration(construction.durationSeconds ?? 8);
+        setConstructionCrewPreset(construction.crewPreset ?? 'ktht');
         setConstructionReferences(construction.referenceAssets ?? '');
         setConstructionAdditional(construction.additionalRequirements ?? '');
       }
@@ -188,12 +224,50 @@ export function ExtensionPanel() {
       outputType: constructionOutputType,
       aspectRatio: constructionAspectRatio,
       durationSeconds: constructionDuration,
+      participantCount: 1,
+      crewPreset: constructionCrewPreset,
       referenceAssets: constructionReferences,
       additionalRequirements: constructionAdditional,
       ...patch
     };
     void chrome.storage.local.set({ [STORAGE_KEYS.constructionDraft]: nextDraft }).catch(() => undefined);
-  }, [constructionContext, constructionDialogue, constructionOutputType, constructionAspectRatio, constructionDuration, constructionReferences, constructionAdditional]);
+  }, [constructionContext, constructionDialogue, constructionOutputType, constructionAspectRatio, constructionDuration, constructionCrewPreset, constructionReferences, constructionAdditional]);
+
+  const constructionReferencePreviews = useMemo(
+    () => constructionReferenceFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [constructionReferenceFiles]
+  );
+  useEffect(() => () => constructionReferencePreviews.forEach(({ url }) => URL.revokeObjectURL(url)), [constructionReferencePreviews]);
+
+  const constructionRequirementCheck = useMemo(() => inspectConstructionAdditionalRequirements(constructionAdditional, {
+    outputType: constructionOutputType,
+    aspectRatio: constructionAspectRatio,
+    crewPreset: constructionCrewPreset
+  }), [constructionAdditional, constructionOutputType, constructionAspectRatio, constructionCrewPreset]);
+
+  const updateConstructionReferenceFiles = (files: File[]) => {
+    setConstructionReferenceFiles(files);
+    const names = files.map((file) => file.name).join(', ');
+    setConstructionReferences(names);
+    setConstructionCompiled(null);
+    saveConstructionDraft({ referenceAssets: names });
+    setStatus(files.length > 0 ? `Đã chọn ${files.length} ảnh tham chiếu thật.` : 'Đã bỏ toàn bộ ảnh tham chiếu.');
+  };
+
+  const addConstructionReferenceFiles = (files: FileList | File[] | null) => {
+    const incoming = [...(files ?? [])];
+    const selected = mergeReferenceFiles(constructionReferenceFiles, incoming);
+    if (selected.length > MAX_REFERENCE_FILES) {
+      setStatus(`Chỉ được chọn tối đa ${MAX_REFERENCE_FILES} ảnh tham chiếu.`);
+      return;
+    }
+    const invalid = incoming.find((file) => !ALLOWED_REFERENCE_TYPES.has(file.type) || file.size > MAX_REFERENCE_FILE_SIZE);
+    if (invalid) {
+      setStatus(`File ${invalid.name} không phải ảnh hợp lệ hoặc lớn hơn 5 MB.`);
+      return;
+    }
+    updateConstructionReferenceFiles(selected);
+  };
 
   const switchTab = (tab: 'standard' | 'construction') => {
     setActiveTab(tab);
@@ -316,9 +390,11 @@ export function ExtensionPanel() {
         dialogue: constructionDialogue,
         outputType: constructionOutputType,
         aspectRatio: constructionAspectRatio,
-        durationSeconds: constructionDuration,
+        durationSeconds: constructionOutputType === 'video' ? constructionDuration : undefined,
         referenceAssets: constructionReferences,
-        additionalRequirements: constructionAdditional
+        referenceAssetCount: constructionReferenceFiles.length,
+        additionalRequirements: constructionAdditional,
+        crewPreset: constructionCrewPreset
       });
       setConstructionCompiled(result);
       saveConstructionDraft({});
@@ -364,9 +440,10 @@ export function ExtensionPanel() {
     if (!result) return;
     setBusy(true);
     try {
-      const reply = await sendToGemini({ type: 'LPROMPT_INSERT', prompt: result.prompt });
+      const attachments = await Promise.all(constructionReferenceFiles.map(fileToAttachment));
+      const reply = await sendToGemini({ type: 'LPROMPT_INSERT', prompt: result.prompt, attachments });
       if (!reply.ok) throw new Error(reply.error || 'Không thể chèn prompt.');
-      setStatus('Đã chèn prompt thi công vào Gemini. Hãy tự bấm Gửi.');
+      setStatus(reply.warning || `Đã chèn prompt${attachments.length > 0 ? ` và ${attachments.length} ảnh tham chiếu` : ''} vào Gemini. Hãy tự bấm Gửi.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Không thể chèn prompt vào Gemini.');
     } finally {
@@ -390,12 +467,16 @@ export function ExtensionPanel() {
   const loadConstructionSample = () => {
     setConstructionContext(SAMPLE_CONSTRUCTION_CONTEXT);
     setConstructionDialogue(SAMPLE_CONSTRUCTION_DIALOGUE);
-    setConstructionReferences(DEFAULT_CONSTRUCTION_REFERENCES);
+    setConstructionCrewPreset('ktht');
+    setConstructionReferences('');
+    setConstructionReferenceFiles([]);
     setConstructionCompiled(null);
     saveConstructionDraft({
       context: SAMPLE_CONSTRUCTION_CONTEXT,
       dialogue: SAMPLE_CONSTRUCTION_DIALOGUE,
-      referenceAssets: DEFAULT_CONSTRUCTION_REFERENCES
+      participantCount: 1,
+      crewPreset: 'ktht',
+      referenceAssets: ''
     });
     setStatus('Đã nạp mẫu bối cảnh và lời thoại thi công.');
   };
@@ -403,12 +484,16 @@ export function ExtensionPanel() {
   const resetConstruction = () => {
     setConstructionContext('');
     setConstructionDialogue('');
+    setConstructionCrewPreset('ktht');
     setConstructionReferences('');
+    setConstructionReferenceFiles([]);
     setConstructionAdditional('');
     setConstructionCompiled(null);
     saveConstructionDraft({
       context: '',
       dialogue: '',
+      participantCount: 1,
+      crewPreset: 'ktht',
       referenceAssets: '',
       additionalRequirements: ''
     });
@@ -653,7 +738,7 @@ export function ExtensionPanel() {
 
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
             {/* Phân loại: Ảnh vs Video */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${constructionOutputType === 'video' ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <button
                 type="button"
                 onClick={() => {
@@ -732,37 +817,81 @@ export function ExtensionPanel() {
                   <option value="1:1">1:1 (Vuông)</option>
                 </select>
               </label>
-              <label className="text-[11px] text-slate-400">
-                {constructionOutputType === 'video' ? 'Thời lượng video (3-30s)' : 'Thời lượng phân cảnh (3-30s)'}
-                <input
-                  type="number"
-                  min={3}
-                  max={30}
-                  value={constructionDuration}
-                  onChange={(event) => {
-                    const val = Number(event.target.value);
-                    setConstructionDuration(val);
-                    setConstructionCompiled(null);
-                    saveConstructionDraft({ durationSeconds: val });
-                  }}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white"
-                />
-              </label>
+              {constructionOutputType === 'video' && (
+                <label className="text-[11px] text-slate-400">
+                  Thời lượng video (3-30s)
+                  <input
+                    type="number"
+                    min={3}
+                    max={30}
+                    value={constructionDuration}
+                    onChange={(event) => {
+                      const val = Number(event.target.value);
+                      setConstructionDuration(val);
+                      setConstructionCompiled(null);
+                      saveConstructionDraft({ durationSeconds: val });
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </label>
+              )}
             </div>
 
             <label className="block text-[11px] text-slate-400">
-              Ảnh tham chiếu PPE / công trường
-              <input
-                value={constructionReferences}
+              <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5 text-amber-300" />Số người trong cảnh</span>
+              <select
+                value={constructionCrewPreset}
                 onChange={(event) => {
-                  setConstructionReferences(event.target.value);
+                  const value = event.target.value as ConstructionCrewPreset;
+                  setConstructionCrewPreset(value);
                   setConstructionCompiled(null);
-                  saveConstructionDraft({ referenceAssets: event.target.value });
+                  saveConstructionDraft({ crewPreset: value });
                 }}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-amber-500"
-                placeholder="Ví dụ: AoCBCNDLogo.JPG, Mu_KTHT.PNG, reference_sheet.PNG"
-              />
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white"
+              >
+                {CONSTRUCTION_CREW_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
             </label>
+
+            <div className="space-y-2">
+              <span className="block text-[11px] text-slate-400">Ảnh tham chiếu thật</span>
+              <label
+                onDragEnter={(event) => { event.preventDefault(); setIsConstructionReferenceDragActive(true); }}
+                onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setIsConstructionReferenceDragActive(true); }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsConstructionReferenceDragActive(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setIsConstructionReferenceDragActive(false);
+                  addConstructionReferenceFiles(event.dataTransfer.files);
+                }}
+                className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed px-2 py-3 text-[11px] transition-colors ${isConstructionReferenceDragActive ? 'border-amber-400 bg-amber-500/15 text-amber-100' : 'border-slate-700 bg-slate-950 text-slate-300 hover:border-amber-500/60 hover:text-amber-200'}`}
+              >
+                <Upload className="h-3.5 w-3.5" /> Kéo thả ảnh vào đây hoặc bấm để chọn · tối đa {MAX_REFERENCE_FILES} ảnh, mỗi ảnh ≤ 5 MB
+                <input type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(event) => { addConstructionReferenceFiles(event.target.files); event.currentTarget.value = ''; }} />
+              </label>
+              {constructionReferencePreviews.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {constructionReferencePreviews.map(({ file, url }) => (
+                    <div key={`${file.name}-${file.lastModified}`} className="relative overflow-hidden rounded-lg border border-slate-700 bg-slate-950">
+                      <img src={url} alt={file.name} className="h-20 w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = constructionReferenceFiles.filter((item) => item !== file);
+                          updateConstructionReferenceFiles(next);
+                        }}
+                        className="absolute right-1 top-1 rounded bg-black/70 p-1 text-white"
+                        aria-label={`Xóa ${file.name}`}
+                      ><X className="h-3 w-3" /></button>
+                      <div className="truncate px-1.5 py-1 text-[9px] text-slate-400" title={file.name}>{file.name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500">Ảnh chỉ được giữ trong phiên side panel và sẽ được đính kèm khi bấm “Chèn vào Gemini”.</p>
+            </div>
 
             <label className="block text-[11px] text-slate-400">
               Yêu cầu bổ sung (tuỳ chọn)
@@ -778,9 +907,15 @@ export function ExtensionPanel() {
               />
             </label>
 
+            {constructionRequirementCheck.issues.map((issue) => (
+              <div key={issue.code} className={`rounded-lg border p-2 text-[10px] ${issue.severity === 'error' ? 'border-rose-500/30 bg-rose-500/10 text-rose-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}`}>
+                {issue.message}
+              </div>
+            ))}
+
             <button
               type="button"
-              disabled={!constructionContext.trim()}
+              disabled={!constructionContext.trim() || constructionRequirementCheck.issues.some((issue) => issue.severity === 'error')}
               onClick={() => compileConstruction()}
               className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-amber-950/30 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
             >

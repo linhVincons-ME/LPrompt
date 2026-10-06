@@ -48,7 +48,7 @@ export function createLocalOptimizationResult(
     improved_prompt: compiled.prompt,
     original_score: originalScore,
     new_score: newScore,
-    changes_summary: changes,
+    changes_summary: compiled.changes ?? changes,
     compiler_applied: compiled.framework,
     explanation: `${compiled.reason} Đây là kết quả compiler cục bộ, không gọi API và cần được kiểm thử với dữ liệu thực tế.`
   };

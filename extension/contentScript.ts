@@ -16,7 +16,7 @@ function classifyTransientFailure(text: string): TransientFailure | null {
 }
 
 type LPromptMessage =
-  | { type: 'LPROMPT_INSERT'; prompt: string }
+  | { type: 'LPROMPT_INSERT'; prompt: string; attachments?: Array<{ name: string; type: string; dataUrl: string }> }
   | { type: 'LPROMPT_IMPORT_RESPONSE' };
 
 function findComposer(): HTMLElement | null {
@@ -33,7 +33,41 @@ function findComposer(): HTMLElement | null {
   return null;
 }
 
-function insertPrompt(prompt: string): { ok: boolean; error?: string } {
+function findAttachmentInput(): HTMLInputElement | null {
+  const inputs = [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')];
+  return inputs.find((input) => input.multiple && /image|png|jpe?g|webp/i.test(input.accept))
+    ?? inputs.find((input) => input.multiple && !input.accept)
+    ?? inputs.find((input) => /image|png|jpe?g|webp/i.test(input.accept))
+    ?? null;
+}
+
+function dataUrlToFile(attachment: { name: string; type: string; dataUrl: string }): File {
+  const parts = attachment.dataUrl.split(',');
+  if (parts.length !== 2 || !parts[0].includes(';base64')) throw new Error(`Dữ liệu ảnh ${attachment.name} không hợp lệ.`);
+  const binary = atob(parts[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new File([bytes], attachment.name, { type: attachment.type });
+}
+
+async function attachReferenceImages(attachments: Array<{ name: string; type: string; dataUrl: string }>): Promise<{ ok: boolean; error?: string }> {
+  if (attachments.length === 0) return { ok: true };
+  if (attachments.length > 4) return { ok: false, error: 'Chỉ được đính kèm tối đa 4 ảnh tham chiếu.' };
+  const invalid = attachments.find((attachment) => !/^image\/(png|jpeg|webp)$/i.test(attachment.type) || attachment.dataUrl.length > 7_000_000);
+  if (invalid) return { ok: false, error: `Ảnh ${invalid.name} không hợp lệ hoặc vượt quá giới hạn 5 MB.` };
+  const input = findAttachmentInput();
+  if (!input) return { ok: false, error: 'Không tìm thấy ô đính kèm của Gemini. Hãy mở menu tải tệp trên Gemini rồi bấm Chèn lại.' };
+  const transfer = new DataTransfer();
+  attachments.forEach((attachment) => transfer.items.add(dataUrlToFile(attachment)));
+  input.files = transfer.files;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true };
+}
+
+async function insertPrompt(prompt: string, attachments: Array<{ name: string; type: string; dataUrl: string }> = []): Promise<{ ok: boolean; error?: string }> {
+  const attachmentResult = await attachReferenceImages(attachments);
+  if (!attachmentResult.ok) return attachmentResult;
   const composer = findComposer();
   if (!composer) return { ok: false, error: 'Không tìm thấy ô nhập Gemini. Hãy mở một cuộc trò chuyện rồi thử lại.' };
   composer.focus();
@@ -86,9 +120,14 @@ function importResponse(): { ok: boolean; text?: string; error?: string; transie
 }
 
 chrome.runtime.onMessage.addListener((message: LPromptMessage, _sender, sendResponse) => {
+  if (message.type === 'LPROMPT_INSERT') {
+    void insertPrompt(message.prompt, message.attachments).then(sendResponse).catch((error) => {
+      sendResponse({ ok: false, error: error instanceof Error ? error.message : 'Không thể đính kèm ảnh tham chiếu.' });
+    });
+    return true;
+  }
   try {
-    if (message.type === 'LPROMPT_INSERT') sendResponse(insertPrompt(message.prompt));
-    else if (message.type === 'LPROMPT_IMPORT_RESPONSE') sendResponse(importResponse());
+    if (message.type === 'LPROMPT_IMPORT_RESPONSE') sendResponse(importResponse());
     else sendResponse({ ok: false, error: 'LPrompt nhận được message không hợp lệ.' });
   } catch (error) {
     sendResponse({ ok: false, error: error instanceof Error ? error.message : 'Content script gặp lỗi không xác định.' });

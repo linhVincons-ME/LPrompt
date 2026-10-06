@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import type { PromptDomain } from '../types';
-import { createLocalOptimizationResult, optimizePromptLocally, type OptimizationResult } from '../services/optimizer';
+import { createLocalOptimizationResult, type OptimizationResult } from '../services/optimizer';
 import { compilePromptFramework, type OutputLanguage } from '../services/frameworkCompiler';
+import { OutputOptionsPanel } from './OutputOptionsPanel';
+import { DEFAULT_OUTPUT_OPTIONS, type OutputOptions } from '../services/outputOptions';
 import {
   Sparkles,
   ArrowRight,
@@ -9,7 +11,6 @@ import {
   Check,
   RotateCcw,
   CheckCircle2,
-  Send,
   Loader2,
   FileCheck,
   AlertCircle,
@@ -42,7 +43,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   onOpenBatchEval
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
-  const [selectedGoal, setSelectedGoal] = useState('production_ready');
+  const [outputOptions, setOutputOptions] = useState<OutputOptions>({ ...DEFAULT_OUTPUT_OPTIONS });
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>('vi');
   const [customInstruction, setCustomInstruction] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -50,18 +51,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const goals = [
-    { id: 'production_ready', label: 'Sẵn sàng Production', desc: 'Rõ input, constraints, output và fallback', instruction: { vi: 'Tạo prompt có hợp đồng rõ ràng, kiểm tra được và xử lý an toàn khi thiếu dữ liệu.', en: 'Create a prompt with a clear, testable contract and safe behavior when required data is missing.' } },
-    { id: 'guardrails', label: 'Thêm Rào Chắn Lỗi', desc: 'Giảm ảo giác và suy diễn ngoài dữ liệu', instruction: { vi: 'Ưu tiên rào chắn, chỉ rõ dữ liệu không đủ và không tự bịa thông tin.', en: 'Prioritize guardrails, identify insufficient data, and never fabricate information.' } },
-    { id: 'strict_json', label: 'Ép Schema Đầu Ra', desc: 'Định dạng JSON hoặc bảng máy đọc được', instruction: { vi: 'Định nghĩa schema đầu ra chặt chẽ và yêu cầu tuân thủ đúng kiểu dữ liệu.', en: 'Define a strict output schema and require exact data-type compliance.' } },
-    { id: 'verifiable_reasoning', label: 'Lập Luận Có Thể Kiểm Tra', desc: 'Kết luận, giả định và bằng chứng ngắn gọn', instruction: { vi: 'Trả về kết luận cùng giả định và căn cứ có thể kiểm tra; không yêu cầu chuỗi suy luận riêng tư.', en: 'Return conclusions with verifiable assumptions and evidence; do not request private chain-of-thought.' } },
-    { id: 'multimodal_specs', label: 'Thông Số Chuyên Ngành', desc: 'Ánh sáng, camera, render hoặc code stack', instruction: { vi: 'Bổ sung thông số kỹ thuật đặc thù lĩnh vực khi chúng thực sự liên quan.', en: 'Add domain-specific technical parameters only when they are materially relevant.' } },
-  ];
-
-  const getGoalInstruction = (language: OutputLanguage) =>
-    goals.find((goal) => goal.id === selectedGoal)?.instruction[language] ?? selectedGoal;
-
-  const handleOptimize = async (instructionOverride = customInstruction) => {
+  const handleOptimize = async () => {
     if (!inputPrompt.trim()) {
       setErrorMessage('Vui lòng nhập nội dung prompt cần tối ưu hóa.');
       return;
@@ -71,13 +61,8 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
     setErrorMessage(null);
 
     try {
-      const res = await optimizePromptLocally(
-        inputPrompt,
-        domain,
-        getGoalInstruction(outputLanguage),
-        instructionOverride,
-        outputLanguage
-      );
+      const compiled = compilePromptFramework(inputPrompt, 'STANDARD', { domain, additionalInstruction: customInstruction, outputLanguage, outputOptions });
+      const res = createLocalOptimizationResult(inputPrompt, domain, compiled);
       setOptimizationResult(res);
     } catch (err: any) {
       setErrorMessage(err.message || 'Không thể biên dịch prompt cục bộ.');
@@ -92,7 +77,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
     try {
       const compiled = compilePromptFramework(inputPrompt, 'STANDARD', {
         domain,
-        goal: getGoalInstruction(language),
+        outputOptions,
         additionalInstruction: customInstruction,
         outputLanguage: language
       });
@@ -137,47 +122,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
         </span>
       </div>
 
-      {/* Control Panel */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md space-y-4">
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-            1. Chọn mục tiêu chỉnh sửa:
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {goals.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => { setSelectedGoal(g.id); setOptimizationResult(null); }}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  selectedGoal === g.id
-                    ? 'border-indigo-500 bg-indigo-500/15 text-white shadow-md shadow-indigo-600/10'
-                    : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <div className="font-semibold text-xs text-white">{g.label}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">{g.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-slate-800/80">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
-              Chỉ Thị Bổ Sung (Tùy chọn):
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={customInstruction}
-                onChange={(e) => { setCustomInstruction(e.target.value); setOptimizationResult(null); }}
-                placeholder="VD: Viết bằng tiếng Anh chuẩn Oxford, thêm ví dụ JSON thực tế, rút gọn dưới 150 từ..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      <OutputOptionsPanel value={outputOptions} onChange={(value) => { setOutputOptions(value); setOptimizationResult(null); }} instruction={customInstruction} onInstructionChange={(value) => { setCustomInstruction(value); setOptimizationResult(null); }} domain={domain} />
 
       {/* Error message */}
       {errorMessage && (
@@ -217,7 +162,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setInputPrompt('')}
+                onClick={() => { setInputPrompt(''); setOptimizationResult(null); }}
                 className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -406,42 +351,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
             </div>
           </div>
 
-          {/* Interactive Chat Refinement Loop */}
-          <div className="pt-3 border-t border-slate-800">
-            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
-              💬 Chưa hoàn toàn ưng ý? Thêm yêu cầu rồi biên dịch lại:
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="VD: 'Thêm ví dụ phản hồi mẫu', 'Chuyển sang phong cách vui tươi hơn', 'Thêm thẻ --ar 9:16'..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const val = (e.target as HTMLInputElement).value;
-                    if (val.trim()) {
-                      handleOptimize(val);
-                      (e.target as HTMLInputElement).value = '';
-                    }
-                  }
-                }}
-                className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500"
-              />
-              <button
-                type="button"
-                onClick={(e) => {
-                  const inputEl = (e.currentTarget.previousSibling as HTMLInputElement);
-                  if (inputEl?.value.trim()) {
-                    handleOptimize(inputEl.value);
-                    inputEl.value = '';
-                  }
-                }}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Gửi</span>
-              </button>
-            </div>
-          </div>
+
         </div>
       )}
     </div>

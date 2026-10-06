@@ -1,4 +1,5 @@
 import type { PromptDomain } from '../types';
+import { DEFAULT_OUTPUT_OPTIONS, inspectOutputOptions, missingDataRule, outputRules, type OutputOptions } from './outputOptions';
 
 export type PromptFramework = 'STANDARD';
 export type OutputLanguage = 'vi' | 'en';
@@ -8,6 +9,7 @@ export interface FrameworkCompileOptions {
   goal?: string;
   additionalInstruction?: string;
   outputLanguage?: OutputLanguage;
+  outputOptions?: OutputOptions;
 }
 
 export interface FrameworkCompileResult {
@@ -16,6 +18,7 @@ export interface FrameworkCompileResult {
   outputLanguage: OutputLanguage;
   prompt: string;
   reason: string;
+  changes?: string[];
 }
 
 const DOMAIN_NAMES: Record<OutputLanguage, Record<PromptDomain, string>> = {
@@ -55,15 +58,27 @@ export function compilePromptFramework(
   const request = source.trim();
   if (!request) throw new Error('Prompt nguồn đang trống.');
   const outputLanguage = options.outputLanguage ?? 'vi';
-  const prompt = outputLanguage === 'vi'
+  let prompt = outputLanguage === 'vi'
     ? compileVietnamese(request, options)
     : compileEnglish(request, options);
+  const changes = ['Bọc yêu cầu nguồn trong ranh giới dữ liệu rõ ràng', 'Bổ sung vai trò và nguyên tắc bảo toàn dữ kiện'];
+  if (options.outputOptions) {
+    const issues = inspectOutputOptions(options.outputOptions, options.additionalInstruction ?? '');
+    if (issues.length) throw new Error(issues.join('\n'));
+    prompt = prompt.replace(missingDataRule(DEFAULT_OUTPUT_OPTIONS, outputLanguage), missingDataRule(options.outputOptions, outputLanguage));
+    const rules = outputRules(options.outputOptions, outputLanguage);
+    if (rules.length) rules.unshift(outputLanguage === 'vi' ? 'Các tùy chọn dưới đây là cấu hình đầu ra người dùng đã chọn cho lần biên dịch này. Nếu mâu thuẫn với yêu cầu nguồn, nêu xung đột thay vì âm thầm bỏ qua.' : 'The following options are the output settings selected for this compilation. If they conflict with the source request, identify the conflict rather than silently ignoring it.');
+    if (rules.length) prompt += `\n\n[${outputLanguage === 'vi' ? 'TÙY CHỌN ĐẦU RA' : 'OUTPUT OPTIONS'}]\n${rules.map((rule) => `- ${rule}`).join('\n')}`;
+    changes.push(missingDataRule(options.outputOptions, 'vi'), ...outputRules(options.outputOptions, 'vi'));
+  } else changes.push('Bổ sung yêu cầu đầu ra và hành vi khi thiếu dữ liệu');
+  if (options.additionalInstruction?.trim()) changes.push('Giữ chỉ thị bổ sung trong bản biên dịch');
 
   return {
     requestedFramework: 'STANDARD',
     framework: 'STANDARD',
     outputLanguage,
     prompt,
+    changes,
     reason: outputLanguage === 'vi'
       ? 'Đã áp dụng bộ biên dịch chuẩn duy nhất của LPrompt.'
       : 'Applied the single standard LPrompt compiler.'

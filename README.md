@@ -38,11 +38,13 @@ Luồng sử dụng:
 ### Prompt thi công công trình (Tích hợp trong cả Extension & Web App)
 
 Trong cả **Extension (Chrome & Firefox)** lẫn **Web App**, chọn tab **Thi Công** (biểu tượng mũ bảo hộ) để mở compiler chuyên ngành hiện trường:
-- Hỗ trợ tạo prompt Ảnh và Video (tùy chọn tỷ lệ 9:16, 16:9, 1:1, thời lượng 3-30s).
-- Cấu trúc đầu ra chuẩn hóa 7 phần nghiệp vụ: `[ĐẦU RA VÀ THỜI LƯỢNG]`, `[VAI TRÒ TỪNG ẢNH]`, `[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]`, `[BỐI CẢNH, VỊ TRÍ VẬT THỂ]`, `[HÀNH ĐỘNG VÀ CAMERA]`, `[ÂM THANH]`, `[RÀNG BUỘC NGẮN, KHÔNG MÂU THUẪN]`.
+- Hỗ trợ prompt Ảnh và Video với tỷ lệ 9:16, 16:9 hoặc 1:1; thời lượng và âm thanh chỉ xuất hiện trong prompt video.
+- Cấu hình nhân sự cố định: `1 người - KTHT`, `2 người - KTHT, TDTD`, `2 người - KTHT, CND`, `2 người - TDTD, CND` hoặc `3 người - KTHT, 2 CND`.
+- Tải tối đa 4 ảnh tham chiếu PNG/JPG/WebP, mỗi ảnh tối đa 5 MB. Extension giữ ảnh trong phiên và đính kèm khi người dùng bấm **Chèn vào Gemini**.
+- Tự loại yêu cầu bổ sung trùng lặp kèm cảnh báo và chặn biên dịch khi phát hiện tỷ lệ, số người, chữ/phụ đề hoặc thuộc tính media mâu thuẫn.
 - Định hướng hành động tự nhiên của KTHT dựa trên lời thoại thay vì in chữ thô lên ảnh/video.
 - Áp dụng chuẩn an toàn lao động, trang phục PPE (mũ, áo, tem chức danh), bảo vệ kỹ thuật tuyến cáp/hố ga và cấm bịa đặt kết quả nghiệm thu.
-- Nút **Chèn vào Gemini** trực tiếp từ extension side panel / sidebar.
+- Nút **Chèn vào Gemini** trực tiếp từ extension side panel / sidebar; extension không tự bấm gửi. Nếu Gemini chưa dựng ô tải tệp, mở menu tải tệp trên Gemini rồi bấm Chèn lại.
 
 Draft, phản hồi và tối đa 10 snapshot được lưu bằng `chrome.storage.local`.
 

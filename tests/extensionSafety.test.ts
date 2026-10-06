@@ -53,5 +53,8 @@ describe('extension safety contract', () => {
     expect(extensionPanel).toContain('Prompt thi công công trình');
     expect(extensionPanel).toContain('lpromptConstructionDraft');
     expect(extensionPanel).toContain('insertConstruction');
+    expect(extensionPanel).toContain('constructionReferenceFiles');
+    expect(contentScript).toContain('DataTransfer');
+    expect(contentScript).toContain('attachReferenceImages');
   });
 });

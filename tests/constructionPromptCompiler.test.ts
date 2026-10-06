@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { compileConstructionPrompt } from '../src/services/constructionPromptCompiler';
+import { compileConstructionPrompt, CONSTRUCTION_CREW_OPTIONS, inspectConstructionAdditionalRequirements } from '../src/services/constructionPromptCompiler';
 
 describe('construction prompt compiler', () => {
-  const REQUIRED_SECTIONS = [
+  const IMAGE_SECTIONS = [
+    '[ĐẦU RA]',
+    '[VAI TRÒ TỪNG ẢNH]',
+    '[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]',
+    '[BỐI CẢNH, VỊ TRÍ VẬT THỂ]',
+    '[HÀNH ĐỘNG VÀ CAMERA]',
+    '[RÀNG BUỘC NGẮN, KHÔNG MÂU THUẪN]'
+  ];
+
+  const VIDEO_SECTIONS = [
     '[ĐẦU RA VÀ THỜI LƯỢNG]',
     '[VAI TRÒ TỪNG ẢNH]',
     '[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]',
@@ -12,9 +21,9 @@ describe('construction prompt compiler', () => {
     '[RÀNG BUỘC NGẮN, KHÔNG MÂU THUẪN]'
   ];
 
-  it('compiles image construction prompt with all 7 required sections', () => {
+  it('compiles an image prompt without video-only concepts or duplicate context rules', () => {
     const result = compileConstructionPrompt({
-      context: 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu.',
+      context: 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu. Khung hình 9:16. Không tạo chữ, logo, phụ đề hoặc text trên màn hình; bổ sung chữ ở hậu kỳ. Hậu cảnh phải thể hiện đúng hạng mục thi công và phạm vi kiểm tra theo mô tả hoặc ảnh hiện trường, không tự thêm cấu tạo kỹ thuật chưa được cung cấp.',
       dialogue: 'Hướng dẫn nghiệm thu dây cáp điện hạ tầng, các bước triển khai như sau.',
       outputType: 'image',
       aspectRatio: '16:9',
@@ -24,11 +33,18 @@ describe('construction prompt compiler', () => {
     });
 
     expect(result.outputType).toBe('image');
-    for (const section of REQUIRED_SECTIONS) {
+    for (const section of IMAGE_SECTIONS) {
       expect(result.prompt).toContain(section);
     }
     expect(result.prompt).toContain('Ảnh tĩnh tỷ lệ 16:9');
-    expect(result.prompt).toContain('10 giây');
+    expect(result.prompt).not.toContain('10 giây');
+    expect(result.prompt).not.toContain('[ÂM THANH]');
+    expect(result.prompt).not.toContain('Hero shot');
+    expect(result.prompt).not.toContain('- Môi trường:');
+    expect(result.prompt).not.toContain('Tính trung thực kỹ thuật:');
+    expect(result.prompt.match(/9:16/g)).toBeNull();
+    expect(result.prompt.match(/Không text trên ảnh/g)).toHaveLength(1);
+    expect(result.prompt.match(/Hậu cảnh thể hiện đúng hạng mục thi công/g)).toHaveLength(1);
     expect(result.prompt).toContain('KTHT');
     expect(result.prompt).toContain('tuyến cáp điện hạ tầng');
     expect(result.prompt).toContain('Yêu cầu bổ sung: Thể hiện hố ga theo đúng ảnh hiện trường.');
@@ -46,7 +62,7 @@ describe('construction prompt compiler', () => {
     });
 
     expect(result.outputType).toBe('video');
-    for (const section of REQUIRED_SECTIONS) {
+    for (const section of VIDEO_SECTIONS) {
       expect(result.prompt).toContain(section);
     }
     expect(result.prompt).toContain('Video hướng dẫn kỹ thuật');
@@ -61,7 +77,7 @@ describe('construction prompt compiler', () => {
       outputType: 'image'
     });
     expect(inspection.prompt).toContain('nghiệm thu');
-    expect(inspection.prompt).toContain('đo');
+    expect(inspection.prompt).toContain('tập trung kiểm tra đối tượng thi công');
 
     const conclusion = compileConstructionPrompt({
       context: 'Hiện trường công trình.',
@@ -86,5 +102,62 @@ describe('construction prompt compiler', () => {
       context: '   ',
       outputType: 'image'
     })).toThrow('Vui lòng nhập bối cảnh thi công.');
+  });
+
+  it('offers only the five approved construction crew presets', () => {
+    expect(CONSTRUCTION_CREW_OPTIONS.map((option) => option.label)).toEqual([
+      '1 người - KTHT',
+      '2 người - KTHT, TDTD',
+      '2 người - KTHT, CND',
+      '2 người - TDTD, CND',
+      '3 người - KTHT, 2 CND'
+    ]);
+
+    const tdtdCnd = compileConstructionPrompt({
+      context: 'Kiểm tra hiện trường thi công.',
+      dialogue: 'Kiểm tra khu vực thi công.',
+      outputType: 'image',
+      crewPreset: 'tdtd-cnd'
+    });
+    expect(tdtdCnd.prompt).toContain('một TDTD và một CND');
+    expect(tdtdCnd.prompt).toContain('TDTD ở vị trí chủ thể');
+    expect(tdtdCnd.prompt).toContain('TDTD tập trung kiểm tra');
+    expect(tdtdCnd.prompt).not.toContain('KTHT chủ trì');
+
+    const kthtTwoWorkers = compileConstructionPrompt({
+      context: 'Kiểm tra hiện trường thi công.',
+      outputType: 'image',
+      crewPreset: 'ktht-2cnd'
+    });
+    expect(kthtTwoWorkers.prompt).toContain('một KTHT và hai CND');
+    expect(kthtTwoWorkers.prompt).toContain('Chỉ có đúng 3 người');
+  });
+
+  it('removes duplicate additions and blocks conflicting additions', () => {
+    const duplicate = inspectConstructionAdditionalRequirements('Khung hình 9:16; không chèn chữ hoặc phụ đề; thể hiện hố ga theo ảnh mẫu.', {
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1
+    });
+    expect(duplicate.normalized).toBe('thể hiện hố ga theo ảnh mẫu');
+    expect(duplicate.issues.filter((issue) => issue.severity === 'warning')).toHaveLength(2);
+
+    expect(() => compileConstructionPrompt({
+      context: 'KTHT kiểm tra hiện trường.',
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1,
+      additionalRequirements: 'Tỷ lệ 16:9; thêm nhạc nền; có phụ đề trên ảnh.'
+    })).toThrow('Yêu cầu bổ sung mâu thuẫn');
+  });
+
+  it('warns when only persisted reference names exist without real files', () => {
+    const result = compileConstructionPrompt({
+      context: 'KTHT kiểm tra hiện trường.',
+      outputType: 'image',
+      referenceAssets: 'reference.png',
+      referenceAssetCount: 0
+    });
+    expect(result.warnings.some((warning) => warning.includes('chưa có file ảnh thật'))).toBe(true);
   });
 });

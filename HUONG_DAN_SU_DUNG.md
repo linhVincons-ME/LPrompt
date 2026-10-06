@@ -117,6 +117,7 @@ Service bind mặc định tại `127.0.0.1:8484`, cung cấp web app, SQLite, R
 
 - **Thẩm định 100đ:** heuristic theo role/context, task clarity, constraints, output format và examples/specs.
 - **LPrompt Compiler:** một bộ biên dịch chuẩn duy nhất, tập trung vào đầu vào, ràng buộc, định dạng kết quả và chống bịa dữ liệu.
+- **Prompt thi công:** tải ảnh tham chiếu thật, chọn cấu hình KTHT/TDTD/CND được phê duyệt, tự loại yêu cầu bổ sung trùng và chặn yêu cầu mâu thuẫn trước khi biên dịch.
 - **Few-Shot:** tạo mẫu heuristic theo domain và cho phép sửa thủ công.
 - **Template Test:** điền biến và chạy assertion `contains`, `not_contains`, `regex`, `min_length` trên template cục bộ; không gọi AI.
 - **Kiểm tra mơ hồ/xung đột:** phát hiện giới hạn độ dài, ngôn ngữ, định dạng mâu thuẫn và các tiêu chí khó đo lường.
