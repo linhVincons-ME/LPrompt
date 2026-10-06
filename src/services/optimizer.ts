@@ -1,13 +1,13 @@
 import type { PromptDomain } from '../types';
 import { evaluatePromptLocally } from './evaluator';
-import { compilePromptFramework, type OutputLanguage, type PromptFramework } from './frameworkCompiler';
+import { compilePromptFramework, type OutputLanguage } from './frameworkCompiler';
 
 export interface OptimizationResult {
   improved_prompt: string;
   original_score: number;
   new_score: number;
   changes_summary: string[];
-  framework_applied: string;
+  compiler_applied: string;
   explanation: string;
 }
 
@@ -18,7 +18,6 @@ export async function optimizePromptLocally(
   prompt: string,
   domain: PromptDomain,
   goal: string,
-  framework: PromptFramework,
   customInstruction: string,
   outputLanguage: OutputLanguage
 ): Promise<OptimizationResult> {
@@ -26,7 +25,7 @@ export async function optimizePromptLocally(
   if (!p) {
     throw new Error('Vui lòng nhập nội dung prompt cần tối ưu.');
   }
-  const compiled = compilePromptFramework(p, framework, { domain, goal, additionalInstruction: customInstruction, outputLanguage });
+  const compiled = compilePromptFramework(p, 'STANDARD', { domain, goal, additionalInstruction: customInstruction, outputLanguage });
   return createLocalOptimizationResult(p, domain, compiled);
 }
 
@@ -39,9 +38,9 @@ export function createLocalOptimizationResult(
   compiled: ReturnType<typeof compilePromptFramework>
 ): OptimizationResult {
   const changes = [
-    `Compiler cục bộ đã áp dụng ${compiled.framework}`,
+    'Đã áp dụng bộ biên dịch chuẩn của LPrompt',
     'Bọc yêu cầu nguồn trong ranh giới dữ liệu rõ ràng',
-    'Bổ sung role, output contract và hành vi khi thiếu dữ liệu phù hợp với framework'
+    'Bổ sung vai trò, yêu cầu đầu ra và hành vi khi thiếu dữ liệu'
   ];
   const originalScore = evaluatePromptLocally(prompt, domain).total_score;
   const newScore = evaluatePromptLocally(compiled.prompt, domain).total_score;
@@ -50,7 +49,7 @@ export function createLocalOptimizationResult(
     original_score: originalScore,
     new_score: newScore,
     changes_summary: changes,
-    framework_applied: compiled.framework,
+    compiler_applied: compiled.framework,
     explanation: `${compiled.reason} Đây là kết quả compiler cục bộ, không gọi API và cần được kiểm thử với dữ liệu thực tế.`
   };
 }

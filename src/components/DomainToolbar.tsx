@@ -165,7 +165,7 @@ export const DomainToolbar: React.FC<DomainToolbarProps> = ({ domain, onInsertTa
   }
 
   // Research
-  const frameworkTags = [
+  const researchTags = [
     'Phân tích SWOT & Rủi ro',
     'So sánh ma trận đối chiếu',
     'Executive Summary 3 gạch đầu dòng',
@@ -180,7 +180,7 @@ export const DomainToolbar: React.FC<DomainToolbarProps> = ({ domain, onInsertTa
         <span>Khung Luận Điểm Nghiên Cứu:</span>
       </span>
 
-      {frameworkTags.map((ft) => (
+      {researchTags.map((ft) => (
         <button
           key={ft}
           onClick={() => onInsertTag(`\n- Yêu cầu: ${ft}`)}

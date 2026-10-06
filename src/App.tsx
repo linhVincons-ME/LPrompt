@@ -13,12 +13,13 @@ import { extractVariables, interpolateTemplate, getInitialVariableValues } from 
 import { stableContentHash } from './utils/hash';
 import { BRANCH_NAME_PATTERN, findCommonAncestor, getBranchHead, mergePromptContents } from './utils/versionGraph';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from './utils/storage';
-import { Header } from './components/Header';
+import { Header, type WorkspaceView } from './components/Header';
 import { ScoreGauge } from './components/ScoreGauge';
 import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
 import { DomainToolbar } from './components/DomainToolbar';
 import { SavedLibraryModal } from './components/SavedLibraryModal';
 import { PromptOptimizerView } from './components/PromptOptimizerView';
+import { ConstructionPromptView } from './components/ConstructionPromptView';
 import { VariableInputsPanel } from './components/VariableInputsPanel';
 import { LivePlaygroundModal } from './components/LivePlaygroundModal';
 import { CodeExportModal } from './components/CodeExportModal';
@@ -61,7 +62,7 @@ import {
 export function App() {
   const initialSample = SAMPLE_PROMPTS.find((sample) => sample.domain === 'research')?.prompt || '';
   const [currentDomain, setCurrentDomain] = useState<PromptDomain>('research');
-  const [activeView, setActiveView] = useState<'evaluator' | 'optimizer'>('optimizer');
+  const [activeView, setActiveView] = useState<WorkspaceView>('construction');
   const [rawPrompt, setRawPrompt] = useState<string>(initialSample);
   const [evaluation, setEvaluation] = useState<PromptEvaluation | null>(() => initialSample ? evaluatePromptLocally(initialSample, 'research') : null);
   const [copiedOriginal, setCopiedOriginal] = useState<boolean>(false);
@@ -390,6 +391,7 @@ export function App() {
         currentDomain={currentDomain}
         onSelectDomain={(d) => {
           setCurrentDomain(d);
+          if (activeView === 'construction') setActiveView('evaluator');
           const sample = SAMPLE_PROMPTS.find((item) => item.domain === d)?.prompt || '';
           setRawPrompt(sample);
           setVariableValues(getInitialVariableValues(extractVariables(sample)));
@@ -413,7 +415,18 @@ export function App() {
       {/* Main Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
         {/* VIEW 1: LOCAL PROMPT COMPILER */}
-        {activeView === 'optimizer' ? (
+        {activeView === 'construction' ? (
+          <ConstructionPromptView
+            onUsePrompt={(prompt, outputType) => {
+              const domain = outputType === 'image' ? 'image' : 'video';
+              setCurrentDomain(domain);
+              setRawPrompt(prompt);
+              handleLocalEvaluate(prompt, undefined, domain);
+              setActiveView('evaluator');
+            }}
+            onOpenPlayground={(prompt) => handleOpenPlaygroundWith(prompt)}
+          />
+        ) : activeView === 'optimizer' ? (
           <PromptOptimizerView
             currentPrompt={rawPrompt}
             domain={currentDomain}

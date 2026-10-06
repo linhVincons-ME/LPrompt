@@ -157,6 +157,5 @@ export interface FabricPreset {
   category: 'business' | 'engineering' | 'copywriting' | 'multimodal' | 'research';
   description: string;
   prompt: string;
-  framework: string;
   tags: string[];
 }

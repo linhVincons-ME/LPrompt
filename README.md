@@ -11,25 +11,38 @@ LPrompts Studio là bộ công cụ local-first để soạn, biên dịch, đá
 - Dự án không tích hợp local LLM, Ollama hoặc LM Studio để tránh sử dụng thêm CPU, RAM và dung lượng model.
 - Khi nâng cấp từ bản cũ, web app xóa khóa `lprompt_gemini_config` khỏi `localStorage`.
 
-## Chrome Extension
+## Trình duyệt hỗ trợ (Chrome & Firefox Extension)
 
-Yêu cầu Chrome 114 trở lên.
+Yêu cầu Chrome 114+ hoặc Mozilla Firefox 115+ (khuyên dùng Firefox 142+).
 
 ```powershell
 npm ci
 npm run build:extension
 ```
 
-Mở `chrome://extensions`, bật **Developer mode**, chọn **Load unpacked** và trỏ tới `D:\DevV2\LPrompt\extension-dist`. Sau đó mở `https://gemini.google.com`, bấm biểu tượng LPrompt để mở Side Panel.
+Lệnh `npm run build:extension` sẽ tự động biên dịch cả 2 phiên bản:
+- `extension-dist`: Dành cho Google Chrome / Chromium. Mở `chrome://extensions`, bật **Developer mode**, chọn **Load unpacked** và trỏ tới `D:\DevV2\LPrompt\extension-dist`.
+- `extension-dist-firefox`: Dành cho Mozilla Firefox. Chạy file `Install_LPrompt_Firefox.bat` để mở Firefox và chọn file `manifest.json` trong `extension-dist-firefox` (hoặc chạy `Run_LPrompt_Firefox.bat` để khởi chạy Firefox độc lập đã nạp sẵn extension).
+
+Sau đó mở `https://gemini.google.com`, bấm biểu tượng LPrompt (hoặc mở Sidebar trên Firefox) để bắt đầu.
 
 Luồng sử dụng:
 
-1. Nhập yêu cầu, domain và framework.
-2. Bấm **Biên dịch prompt cục bộ**.
+1. Nhập yêu cầu và chọn domain.
+2. Bấm **Biên dịch prompt cục bộ**. LPrompt sử dụng một bộ biên dịch chuẩn duy nhất.
 3. Chọn `VIE` hoặc `ENG`, đọc lại kết quả.
 4. Bấm **Chèn vào Gemini**. Extension chỉ điền ô soạn; người dùng tự bấm gửi.
 5. Bấm **Nhập phản hồi** để lấy phần đang chọn hoặc phản hồi cuối cùng.
 6. Lưu snapshot nếu cần.
+
+### Prompt thi công công trình (Tích hợp trong cả Extension & Web App)
+
+Trong cả **Extension (Chrome & Firefox)** lẫn **Web App**, chọn tab **Thi Công** (biểu tượng mũ bảo hộ) để mở compiler chuyên ngành hiện trường:
+- Hỗ trợ tạo prompt Ảnh và Video (tùy chọn tỷ lệ 9:16, 16:9, 1:1, thời lượng 3-30s).
+- Cấu trúc đầu ra chuẩn hóa 7 phần nghiệp vụ: `[ĐẦU RA VÀ THỜI LƯỢNG]`, `[VAI TRÒ TỪNG ẢNH]`, `[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]`, `[BỐI CẢNH, VỊ TRÍ VẬT THỂ]`, `[HÀNH ĐỘNG VÀ CAMERA]`, `[ÂM THANH]`, `[RÀNG BUỘC NGẮN, KHÔNG MÂU THUẪN]`.
+- Định hướng hành động tự nhiên của KTHT dựa trên lời thoại thay vì in chữ thô lên ảnh/video.
+- Áp dụng chuẩn an toàn lao động, trang phục PPE (mũ, áo, tem chức danh), bảo vệ kỹ thuật tuyến cáp/hố ga và cấm bịa đặt kết quả nghiệm thu.
+- Nút **Chèn vào Gemini** trực tiếp từ extension side panel / sidebar.
 
 Draft, phản hồi và tối đa 10 snapshot được lưu bằng `chrome.storage.local`.
 

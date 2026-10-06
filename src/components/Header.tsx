@@ -16,14 +16,17 @@ import {
   History,
   Target,
   Layers,
-  Compass
+  Compass,
+  HardHat
 } from 'lucide-react';
+
+export type WorkspaceView = 'evaluator' | 'optimizer' | 'construction';
 
 interface HeaderProps {
   currentDomain: PromptDomain;
   onSelectDomain: (domain: PromptDomain) => void;
-  activeView: 'evaluator' | 'optimizer';
-  onSelectView: (view: 'evaluator' | 'optimizer') => void;
+  activeView: WorkspaceView;
+  onSelectView: (view: WorkspaceView) => void;
   onOpenLibraryModal: () => void;
   onOpenPlayground: () => void;
   onOpenCodeExport: () => void;
@@ -104,6 +107,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Wand2 className="w-3.5 h-3.5 text-pink-300" />
             <span>Biên Dịch Prompt</span>
+          </button>
+          <button
+            onClick={() => onSelectView('construction')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              activeView === 'construction'
+                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-900/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <HardHat className="w-3.5 h-3.5" />
+            <span>Thi Công</span>
           </button>
         </div>
 

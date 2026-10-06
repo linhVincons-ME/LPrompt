@@ -1,23 +1,49 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, ClipboardPaste, Copy, ExternalLink, FileClock, Send, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  Check,
+  ClipboardPaste,
+  Copy,
+  ExternalLink,
+  FileClock,
+  Film,
+  HardHat,
+  Image as ImageIcon,
+  RotateCcw,
+  Send,
+  Sparkles
+} from 'lucide-react';
 import type { PromptDomain } from '../src/types';
 import { evaluatePromptLocally } from '../src/services/evaluator';
 import {
   compilePromptFramework,
-  FRAMEWORK_OPTIONS,
   type FrameworkCompileResult,
-  type OutputLanguage,
-  type PromptFramework
+  type OutputLanguage
 } from '../src/services/frameworkCompiler';
+import {
+  compileConstructionPrompt,
+  type ConstructionOutputType,
+  type ConstructionPromptResult
+} from '../src/services/constructionPromptCompiler';
 import { recordTransientFailure, type AvailabilityState, type TransientFailure } from './availability';
 import { inspectPromptLocally } from '../src/services/promptInspector';
 
 interface StoredDraft {
   source: string;
-  framework: PromptFramework;
   domain: PromptDomain;
   additionalInstruction: string;
   outputLanguage: OutputLanguage;
+}
+
+interface StoredConstructionDraft {
+  context: string;
+  dialogue: string;
+  outputType: ConstructionOutputType;
+  aspectRatio: '9:16' | '16:9' | '1:1';
+  durationSeconds: number;
+  referenceAssets: string;
+  additionalRequirements: string;
 }
 
 interface Snapshot {
@@ -38,10 +64,16 @@ interface GeminiResponse {
 
 const STORAGE_KEYS = {
   draft: 'lpromptDraft',
+  constructionDraft: 'lpromptConstructionDraft',
+  activeTab: 'lpromptActiveTab',
   snapshots: 'lpromptSnapshots',
   lastResponse: 'lpromptLastResponse',
   availability: 'lpromptAvailability'
 } as const;
+
+const SAMPLE_CONSTRUCTION_CONTEXT = 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu.';
+const SAMPLE_CONSTRUCTION_DIALOGUE = 'Hướng dẫn nghiệm thu dây cáp điện hạ tầng, các bước triển khai sẽ diễn ra như sau.';
+const DEFAULT_CONSTRUCTION_REFERENCES = 'AoCBCNDLogo.JPG, Mu_KTHT.PNG, reference_sheet.PNG';
 
 const DOMAINS: Array<{ id: PromptDomain; label: string }> = [
   { id: 'research', label: 'Nghiên cứu' },
@@ -86,8 +118,8 @@ async function sendToGemini(message: object): Promise<GeminiResponse> {
 }
 
 export function ExtensionPanel() {
+  const [activeTab, setActiveTab] = useState<'standard' | 'construction'>('standard');
   const [source, setSource] = useState('');
-  const [framework, setFramework] = useState<PromptFramework>('AUTO');
   const [domain, setDomain] = useState<PromptDomain>('research');
   const [additionalInstruction, setAdditionalInstruction] = useState('');
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>('vi');
@@ -101,15 +133,46 @@ export function ExtensionPanel() {
   const [clock, setClock] = useState(() => Date.now());
   const [lastBridgeDraftId, setLastBridgeDraftId] = useState('');
 
+  // Construction state
+  const [constructionContext, setConstructionContext] = useState('');
+  const [constructionDialogue, setConstructionDialogue] = useState('');
+  const [constructionOutputType, setConstructionOutputType] = useState<ConstructionOutputType>('image');
+  const [constructionAspectRatio, setConstructionAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
+  const [constructionDuration, setConstructionDuration] = useState(8);
+  const [constructionReferences, setConstructionReferences] = useState('');
+  const [constructionAdditional, setConstructionAdditional] = useState('');
+  const [constructionCompiled, setConstructionCompiled] = useState<ConstructionPromptResult | null>(null);
+  const [constructionCopied, setConstructionCopied] = useState(false);
+
   useEffect(() => {
-    void chrome.storage.local.get([STORAGE_KEYS.draft, STORAGE_KEYS.snapshots, STORAGE_KEYS.lastResponse, STORAGE_KEYS.availability]).then((stored) => {
+    void chrome.storage.local.get([
+      STORAGE_KEYS.draft,
+      STORAGE_KEYS.constructionDraft,
+      STORAGE_KEYS.activeTab,
+      STORAGE_KEYS.snapshots,
+      STORAGE_KEYS.lastResponse,
+      STORAGE_KEYS.availability
+    ]).then((stored) => {
       const draft = stored[STORAGE_KEYS.draft] as StoredDraft | undefined;
       if (draft) {
         setSource(draft.source ?? '');
-        setFramework(draft.framework ?? 'AUTO');
         setDomain(draft.domain ?? 'research');
         setAdditionalInstruction(draft.additionalInstruction ?? '');
         setOutputLanguage(draft.outputLanguage ?? 'vi');
+      }
+      const construction = stored[STORAGE_KEYS.constructionDraft] as StoredConstructionDraft | undefined;
+      if (construction) {
+        setConstructionContext(construction.context ?? '');
+        setConstructionDialogue(construction.dialogue ?? '');
+        setConstructionOutputType(construction.outputType ?? 'image');
+        setConstructionAspectRatio(construction.aspectRatio ?? '9:16');
+        setConstructionDuration(construction.durationSeconds ?? 8);
+        setConstructionReferences(construction.referenceAssets ?? '');
+        setConstructionAdditional(construction.additionalRequirements ?? '');
+      }
+      const savedTab = stored[STORAGE_KEYS.activeTab] as 'standard' | 'construction' | undefined;
+      if (savedTab === 'standard' || savedTab === 'construction') {
+        setActiveTab(savedTab);
       }
       setSnapshots((stored[STORAGE_KEYS.snapshots] as Snapshot[] | undefined) ?? []);
       setResponse((stored[STORAGE_KEYS.lastResponse] as string | undefined) ?? '');
@@ -118,17 +181,43 @@ export function ExtensionPanel() {
     }).catch(() => setStatus('Không đọc được dữ liệu cục bộ; bạn vẫn có thể tiếp tục soạn prompt.'));
   }, []);
 
+  const saveConstructionDraft = useCallback((patch: Partial<StoredConstructionDraft>) => {
+    const nextDraft: StoredConstructionDraft = {
+      context: constructionContext,
+      dialogue: constructionDialogue,
+      outputType: constructionOutputType,
+      aspectRatio: constructionAspectRatio,
+      durationSeconds: constructionDuration,
+      referenceAssets: constructionReferences,
+      additionalRequirements: constructionAdditional,
+      ...patch
+    };
+    void chrome.storage.local.set({ [STORAGE_KEYS.constructionDraft]: nextDraft }).catch(() => undefined);
+  }, [constructionContext, constructionDialogue, constructionOutputType, constructionAspectRatio, constructionDuration, constructionReferences, constructionAdditional]);
+
+  const switchTab = (tab: 'standard' | 'construction') => {
+    setActiveTab(tab);
+    void chrome.storage.local.set({ [STORAGE_KEYS.activeTab]: tab }).catch(() => undefined);
+  };
+
   useEffect(() => {
     const listener = (message: unknown) => {
       const payload = message as { type?: string; source?: string };
       if (payload.type !== 'LPROMPT_DRAFT_UPDATED' || !payload.source) return;
-      setSource(payload.source);
-      setCompiled(null);
-      setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
+      if (activeTab === 'construction') {
+        setConstructionContext(payload.source);
+        setConstructionCompiled(null);
+        saveConstructionDraft({ context: payload.source });
+        setStatus('Đã nhận bối cảnh thi công từ văn bản được bôi chọn.');
+      } else {
+        setSource(payload.source);
+        setCompiled(null);
+        setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
+      }
     };
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
-  }, []);
+  }, [activeTab, saveConstructionDraft]);
 
   useEffect(() => {
     let active = true;
@@ -136,15 +225,15 @@ export function ExtensionPanel() {
       const controller = new AbortController();
       const timeout = globalThis.setTimeout(() => controller.abort(), 2500);
       try {
-        const response = await fetch('http://127.0.0.1:8484/api/extension/draft', { signal: controller.signal, cache: 'no-store' });
-        if (!active || response.status === 204 || !response.ok) return;
-        const payload = await response.json() as { data?: { id?: string; source?: string } };
+        const res = await fetch('http://127.0.0.1:8484/api/extension/draft', { signal: controller.signal, cache: 'no-store' });
+        if (!active || res.status === 204 || !res.ok) return;
+        const payload = await res.json() as { data?: { id?: string; source?: string } };
         if (!payload.data?.id || !payload.data.source || payload.data.id === lastBridgeDraftId) return;
         setLastBridgeDraftId(payload.data.id);
         setSource(payload.data.source);
         setCompiled(null);
         setStatus('Đã nhận prompt từ web app cục bộ.');
-        await chrome.storage.local.set({ [STORAGE_KEYS.draft]: { source: payload.data.source, framework, domain, additionalInstruction, outputLanguage } });
+        await chrome.storage.local.set({ [STORAGE_KEYS.draft]: { source: payload.data.source, domain, additionalInstruction, outputLanguage } });
       } catch {
         // Service là tùy chọn; khi offline extension vẫn hoạt động độc lập.
       } finally {
@@ -154,7 +243,7 @@ export function ExtensionPanel() {
     void poll();
     const interval = globalThis.setInterval(() => void poll(), 4000);
     return () => { active = false; globalThis.clearInterval(interval); };
-  }, [lastBridgeDraftId, framework, domain, additionalInstruction, outputLanguage]);
+  }, [lastBridgeDraftId, domain, additionalInstruction, outputLanguage]);
 
   useEffect(() => {
     if (!availability) return;
@@ -201,7 +290,7 @@ export function ExtensionPanel() {
   const promptIssues = useMemo(() => inspectPromptLocally(visiblePrompt || source), [visiblePrompt, source]);
 
   const saveDraft = (patch: Partial<StoredDraft>) => {
-    const draft = { source, framework, domain, additionalInstruction, outputLanguage, ...patch };
+    const draft = { source, domain, additionalInstruction, outputLanguage, ...patch };
     void chrome.storage.local.set({ [STORAGE_KEYS.draft]: draft }).catch(() => {
       setStatus('Không lưu được draft cục bộ; nội dung hiện tại vẫn còn trong panel.');
     });
@@ -209,13 +298,34 @@ export function ExtensionPanel() {
 
   const compile = (language: OutputLanguage = outputLanguage): FrameworkCompileResult | null => {
     try {
-      const result = compilePromptFramework(source, framework, { domain, additionalInstruction, outputLanguage: language });
+      const result = compilePromptFramework(source, 'STANDARD', { domain, additionalInstruction, outputLanguage: language });
       setCompiled(result);
       saveDraft({ outputLanguage: language });
-      setStatus(`Đã biên dịch bằng ${result.framework}. Hãy kiểm tra trước khi chèn.`);
+      setStatus('Đã biên dịch bằng bộ chuẩn LPrompt. Hãy kiểm tra trước khi chèn.');
       return result;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Không thể biên dịch prompt.');
+      return null;
+    }
+  };
+
+  const compileConstruction = (): ConstructionPromptResult | null => {
+    try {
+      const result = compileConstructionPrompt({
+        context: constructionContext,
+        dialogue: constructionDialogue,
+        outputType: constructionOutputType,
+        aspectRatio: constructionAspectRatio,
+        durationSeconds: constructionDuration,
+        referenceAssets: constructionReferences,
+        additionalRequirements: constructionAdditional
+      });
+      setConstructionCompiled(result);
+      saveConstructionDraft({});
+      setStatus('Đã biên dịch prompt thi công công trình.');
+      return result;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Không thể biên dịch prompt thi công.');
       return null;
     }
   };
@@ -245,6 +355,66 @@ export function ExtensionPanel() {
     }
   };
 
+  const insertConstruction = async () => {
+    if (cooldownSeconds > 0) {
+      setStatus(`Đang trong thời gian chờ an toàn. Có thể thử lại sau ${cooldownSeconds} giây.`);
+      return;
+    }
+    const result = constructionCompiled ?? compileConstruction();
+    if (!result) return;
+    setBusy(true);
+    try {
+      const reply = await sendToGemini({ type: 'LPROMPT_INSERT', prompt: result.prompt });
+      if (!reply.ok) throw new Error(reply.error || 'Không thể chèn prompt.');
+      setStatus('Đã chèn prompt thi công vào Gemini. Hãy tự bấm Gửi.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Không thể chèn prompt vào Gemini.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyConstructionPrompt = async () => {
+    const result = constructionCompiled ?? compileConstruction();
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result.prompt);
+      setConstructionCopied(true);
+      setTimeout(() => setConstructionCopied(false), 1500);
+      setStatus('Đã sao chép prompt thi công.');
+    } catch {
+      setStatus('Trình duyệt từ chối clipboard. Hãy chọn và sao chép thủ công.');
+    }
+  };
+
+  const loadConstructionSample = () => {
+    setConstructionContext(SAMPLE_CONSTRUCTION_CONTEXT);
+    setConstructionDialogue(SAMPLE_CONSTRUCTION_DIALOGUE);
+    setConstructionReferences(DEFAULT_CONSTRUCTION_REFERENCES);
+    setConstructionCompiled(null);
+    saveConstructionDraft({
+      context: SAMPLE_CONSTRUCTION_CONTEXT,
+      dialogue: SAMPLE_CONSTRUCTION_DIALOGUE,
+      referenceAssets: DEFAULT_CONSTRUCTION_REFERENCES
+    });
+    setStatus('Đã nạp mẫu bối cảnh và lời thoại thi công.');
+  };
+
+  const resetConstruction = () => {
+    setConstructionContext('');
+    setConstructionDialogue('');
+    setConstructionReferences('');
+    setConstructionAdditional('');
+    setConstructionCompiled(null);
+    saveConstructionDraft({
+      context: '',
+      dialogue: '',
+      referenceAssets: '',
+      additionalRequirements: ''
+    });
+    setStatus('Đã xóa dữ liệu cảnh thi công.');
+  };
+
   const importResponse = async () => {
     setBusy(true);
     try {
@@ -270,14 +440,30 @@ export function ExtensionPanel() {
   };
 
   const saveSnapshot = async () => {
-    const result = compiled ?? compile();
-    if (!result) return;
+    let promptToSave = '';
+    let frameworkLabel = '';
+    let outputLang: OutputLanguage | undefined = outputLanguage;
+
+    if (activeTab === 'construction') {
+      const result = constructionCompiled ?? compileConstruction();
+      if (!result) return;
+      promptToSave = result.prompt;
+      frameworkLabel = `Thi công (${result.outputType === 'image' ? 'Ảnh' : 'Video'})`;
+      outputLang = 'vi';
+    } else {
+      const result = compiled ?? compile();
+      if (!result) return;
+      promptToSave = result.prompt;
+      frameworkLabel = result.framework;
+      outputLang = result.outputLanguage;
+    }
+
     const next: Snapshot[] = [{
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      framework: result.framework,
-      outputLanguage: result.outputLanguage,
-      prompt: result.prompt,
+      framework: frameworkLabel,
+      outputLanguage: outputLang,
+      prompt: promptToSave,
       response: response || undefined
     }, ...snapshots].slice(0, 10);
     setSnapshots(next);
@@ -318,11 +504,45 @@ export function ExtensionPanel() {
               <p className="text-[11px] text-slate-400">Local compiler · không cần API key</p>
             </div>
           </div>
-          <button type="button" onClick={() => void chrome.tabs.create({ url: 'https://gemini.google.com/app' }).catch(() => setStatus('Không thể mở tab Gemini.'))} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" title="Mở Gemini">
+          <button
+            type="button"
+            onClick={() => void chrome.tabs.create({ url: 'https://gemini.google.com/app' }).catch(() => setStatus('Không thể mở tab Gemini.'))}
+            className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+            title="Mở Gemini"
+          >
             <ExternalLink className="h-4 w-4" />
           </button>
         </div>
       </header>
+
+      {/* Workspace Tabs: Tiêu chuẩn vs Thi công */}
+      <div className="flex rounded-xl bg-slate-900 border border-slate-800 p-1 gap-1">
+        <button
+          type="button"
+          onClick={() => switchTab('standard')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'standard'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Tiêu chuẩn</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab('construction')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'construction'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+          }`}
+        >
+          <HardHat className="h-3.5 w-3.5" />
+          <span>Thi công</span>
+          <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300 font-bold uppercase">Mới</span>
+        </button>
+      </div>
 
       {availability && (
         <section role="alert" className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2 text-[11px] text-amber-100">
@@ -330,74 +550,318 @@ export function ExtensionPanel() {
           <p className="leading-relaxed">LPrompt đã giữ nguyên prompt và không tự gửi lại. Lần phát hiện liên tiếp: {availability.consecutiveFailures}.</p>
           <div className="flex items-center justify-between gap-2">
             <span>{cooldownSeconds > 0 ? `Thử lại sau ${cooldownSeconds} giây` : 'Đã có thể chèn lại prompt thủ công'}</span>
-            <button type="button" disabled={busy || cooldownSeconds > 0} onClick={() => void insert()} className="rounded-lg bg-amber-500 px-2.5 py-1.5 font-bold text-slate-950 disabled:opacity-50">
+            <button
+              type="button"
+              disabled={busy || cooldownSeconds > 0}
+              onClick={() => void (activeTab === 'construction' ? insertConstruction() : insert())}
+              className="rounded-lg bg-amber-500 px-2.5 py-1.5 font-bold text-slate-950 disabled:opacity-50"
+            >
               {cooldownSeconds > 0 ? 'Đang chờ' : 'Chèn lại'}
             </button>
           </div>
         </section>
       )}
 
-      <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-[11px] text-slate-400">Domain
-            <select value={domain} onChange={(event) => { const value = event.target.value as PromptDomain; setDomain(value); setCompiled(null); saveDraft({ domain: value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white">
-              {DOMAINS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-          </label>
-          <label className="text-[11px] text-slate-400">Framework
-            <select value={framework} onChange={(event) => { const value = event.target.value as PromptFramework; setFramework(value); setCompiled(null); saveDraft({ framework: value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white">
-              {FRAMEWORK_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-          </label>
-        </div>
-
-        <label className="block text-[11px] font-semibold text-slate-300">Yêu cầu gốc
-          <textarea value={source} onChange={(event) => { setSource(event.target.value); setCompiled(null); saveDraft({ source: event.target.value }); }} className="mt-1 min-h-32 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed outline-none focus:border-indigo-500" placeholder="Mô tả điều bạn muốn Gemini thực hiện…" />
-        </label>
-        <label className="block text-[11px] text-slate-400">Chỉ thị bổ sung (tuỳ chọn)
-          <input value={additionalInstruction} onChange={(event) => { setAdditionalInstruction(event.target.value); setCompiled(null); saveDraft({ additionalInstruction: event.target.value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-indigo-500" placeholder="Ví dụ: trả lời bằng tiếng Việt, dưới 500 từ" />
-        </label>
-        <button type="button" onClick={() => compile()} className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold hover:bg-indigo-500">Biên dịch prompt cục bộ</button>
-      </section>
-
-      {compiled && (
-        <section className="rounded-2xl border border-violet-500/30 bg-slate-900 p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="font-bold text-violet-300">{compiled.framework}</span>
-            <div className="flex items-center gap-2">
-              <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5" aria-label="Ngôn ngữ prompt đầu ra">
-                {([['vi', 'VIE'], ['en', 'ENG']] as const).map(([language, label]) => (
-                  <button
-                    key={language}
-                    type="button"
-                    onClick={() => changeOutputLanguage(language)}
-                    className={`rounded-md px-2 py-1 text-[10px] font-bold ${outputLanguage === language ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                    aria-pressed={outputLanguage === language}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <span className="font-mono text-emerald-300">{evaluation.total_score}/100</span>
+      {/* TAB 1: TIÊU CHUẨN */}
+      {activeTab === 'standard' && (
+        <>
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
+            <div>
+              <label className="text-[11px] text-slate-400">Domain
+                <select value={domain} onChange={(event) => { const value = event.target.value as PromptDomain; setDomain(value); setCompiled(null); saveDraft({ domain: value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white">
+                  {DOMAINS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+              </label>
             </div>
-          </div>
-          <p className="text-[11px] text-slate-400">{compiled.reason}</p>
-          {promptIssues.length > 0 && <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] text-amber-100"><strong>{promptIssues.length} điểm cần xem lại:</strong> {promptIssues.map((issue) => issue.title).join('; ')}.</div>}
-          <textarea readOnly value={compiled.prompt} className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200" />
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => void copyPrompt()} className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs hover:bg-slate-800">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Đã chép' : 'Sao chép'}</button>
-            <button type="button" disabled={busy || cooldownSeconds > 0} onClick={() => void insert()} className="flex items-center justify-center gap-1 rounded-lg bg-violet-600 py-2 text-xs font-bold hover:bg-violet-500 disabled:opacity-50"><Send className="h-3.5 w-3.5" />{cooldownSeconds > 0 ? `Chờ ${cooldownSeconds}s` : 'Chèn vào Gemini'}</button>
-          </div>
-        </section>
+
+            <label className="block text-[11px] font-semibold text-slate-300">Yêu cầu gốc
+              <textarea value={source} onChange={(event) => { setSource(event.target.value); setCompiled(null); saveDraft({ source: event.target.value }); }} className="mt-1 min-h-32 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed outline-none focus:border-indigo-500" placeholder="Mô tả điều bạn muốn Gemini thực hiện…" />
+            </label>
+            <label className="block text-[11px] text-slate-400">Chỉ thị bổ sung (tuỳ chọn)
+              <input value={additionalInstruction} onChange={(event) => { setAdditionalInstruction(event.target.value); setCompiled(null); saveDraft({ additionalInstruction: event.target.value }); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-indigo-500" placeholder="Ví dụ: trả lời bằng tiếng Việt, dưới 500 từ" />
+            </label>
+            <button type="button" onClick={() => compile()} className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold hover:bg-indigo-500">Biên dịch prompt cục bộ</button>
+          </section>
+
+          {compiled && (
+            <section className="rounded-2xl border border-violet-500/30 bg-slate-900 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="font-bold text-violet-300">{compiled.framework}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5" aria-label="Ngôn ngữ prompt đầu ra">
+                    {([['vi', 'VIE'], ['en', 'ENG']] as const).map(([language, label]) => (
+                      <button
+                        key={language}
+                        type="button"
+                        onClick={() => changeOutputLanguage(language)}
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold ${outputLanguage === language ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        aria-pressed={outputLanguage === language}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="font-mono text-emerald-300">{evaluation.total_score}/100</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">{compiled.reason}</p>
+              {promptIssues.length > 0 && <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] text-amber-100"><strong>{promptIssues.length} điểm cần xem lại:</strong> {promptIssues.map((issue) => issue.title).join('; ')}.</div>}
+              <textarea readOnly value={compiled.prompt} className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200" />
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => void copyPrompt()} className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs hover:bg-slate-800">{copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Đã chép' : 'Sao chép'}</button>
+                <button type="button" disabled={busy || cooldownSeconds > 0} onClick={() => void insert()} className="flex items-center justify-center gap-1 rounded-lg bg-violet-600 py-2 text-xs font-bold hover:bg-violet-500 disabled:opacity-50"><Send className="h-3.5 w-3.5" />{cooldownSeconds > 0 ? `Chờ ${cooldownSeconds}s` : 'Chèn vào Gemini'}</button>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
+      {/* TAB 2: THI CÔNG */}
+      {activeTab === 'construction' && (
+        <div className="space-y-3">
+          <section className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-1.5">
+                  <HardHat className="h-4 w-4 text-amber-300" />
+                </div>
+                <div>
+                  <h2 className="text-xs font-bold text-white">Prompt thi công công trình</h2>
+                  <p className="text-[10px] text-slate-300">Compiler ảnh & video hiện trường, PPE, nghiệm thu</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={loadConstructionSample}
+                  className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-500/20"
+                  title="Nạp mẫu bối cảnh chuẩn"
+                >
+                  Mẫu thử
+                </button>
+                <button
+                  type="button"
+                  onClick={resetConstruction}
+                  className="rounded border border-slate-700 p-1 text-slate-400 hover:text-rose-300 hover:bg-slate-800"
+                  title="Xóa trắng"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-3">
+            {/* Phân loại: Ảnh vs Video */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConstructionOutputType('image');
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ outputType: 'image' });
+                }}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-bold transition-all ${
+                  constructionOutputType === 'image'
+                    ? 'border-amber-500 bg-amber-500/15 text-amber-200'
+                    : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <ImageIcon className="h-3.5 w-3.5" /> Prompt Ảnh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConstructionOutputType('video');
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ outputType: 'video' });
+                }}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-bold transition-all ${
+                  constructionOutputType === 'video'
+                    ? 'border-amber-500 bg-amber-500/15 text-amber-200'
+                    : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <Film className="h-3.5 w-3.5" /> Prompt Video
+              </button>
+            </div>
+
+            <label className="block text-[11px] font-semibold text-slate-300">
+              Bối cảnh thi công <span className="text-rose-400">*</span>
+              <textarea
+                value={constructionContext}
+                onChange={(event) => {
+                  setConstructionContext(event.target.value);
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ context: event.target.value });
+                }}
+                className="mt-1 min-h-24 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-2.5 font-mono text-xs leading-relaxed outline-none focus:border-amber-500"
+                placeholder="Ai đang ở đâu, công tác gì đã hoặc đang thực hiện, khu vực nào cần kiểm tra?"
+              />
+            </label>
+
+            <label className="block text-[11px] font-semibold text-slate-300">
+              Lời thoại nhân vật (tuỳ chọn)
+              <textarea
+                value={constructionDialogue}
+                onChange={(event) => {
+                  setConstructionDialogue(event.target.value);
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ dialogue: event.target.value });
+                }}
+                className="mt-1 min-h-16 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-2.5 font-mono text-xs leading-relaxed outline-none focus:border-amber-500"
+                placeholder="Lời nhân vật nói; compiler sẽ định hướng cử chỉ/hành động tự nhiên và không đưa chữ lên ảnh/video."
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[11px] text-slate-400">
+                Tỷ lệ
+                <select
+                  value={constructionAspectRatio}
+                  onChange={(event) => {
+                    const val = event.target.value as typeof constructionAspectRatio;
+                    setConstructionAspectRatio(val);
+                    setConstructionCompiled(null);
+                    saveConstructionDraft({ aspectRatio: val });
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white"
+                >
+                  <option value="9:16">9:16 (Dọc)</option>
+                  <option value="16:9">16:9 (Ngang)</option>
+                  <option value="1:1">1:1 (Vuông)</option>
+                </select>
+              </label>
+              <label className="text-[11px] text-slate-400">
+                {constructionOutputType === 'video' ? 'Thời lượng video (3-30s)' : 'Thời lượng phân cảnh (3-30s)'}
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  value={constructionDuration}
+                  onChange={(event) => {
+                    const val = Number(event.target.value);
+                    setConstructionDuration(val);
+                    setConstructionCompiled(null);
+                    saveConstructionDraft({ durationSeconds: val });
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-white"
+                />
+              </label>
+            </div>
+
+            <label className="block text-[11px] text-slate-400">
+              Ảnh tham chiếu PPE / công trường
+              <input
+                value={constructionReferences}
+                onChange={(event) => {
+                  setConstructionReferences(event.target.value);
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ referenceAssets: event.target.value });
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-amber-500"
+                placeholder="Ví dụ: AoCBCNDLogo.JPG, Mu_KTHT.PNG, reference_sheet.PNG"
+              />
+            </label>
+
+            <label className="block text-[11px] text-slate-400">
+              Yêu cầu bổ sung (tuỳ chọn)
+              <input
+                value={constructionAdditional}
+                onChange={(event) => {
+                  setConstructionAdditional(event.target.value);
+                  setConstructionCompiled(null);
+                  saveConstructionDraft({ additionalRequirements: event.target.value });
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs outline-none focus:border-amber-500"
+                placeholder="Ví dụ: thể hiện hố ga, ống HDPE theo đúng ảnh hiện trường"
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled={!constructionContext.trim()}
+              onClick={() => compileConstruction()}
+              className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-amber-950/30 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Biên dịch prompt thi công
+            </button>
+          </section>
+
+          {constructionCompiled && (
+            <section className="rounded-2xl border border-amber-500/30 bg-slate-900 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="font-bold text-amber-300">
+                  {constructionCompiled.outputType === 'image' ? 'ẢNH THI CÔNG' : 'VIDEO THI CÔNG'}
+                </span>
+                <span className="font-mono text-slate-300">
+                  {constructionAspectRatio} {constructionCompiled.outputType === 'video' ? `· ${constructionDuration}s` : ''}
+                </span>
+              </div>
+
+              {constructionCompiled.warnings.map((warning) => (
+                <div key={warning} className="flex items-start gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-[10px] text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>{warning}</span>
+                </div>
+              ))}
+
+              <textarea
+                readOnly
+                value={constructionCompiled.prompt}
+                className="min-h-48 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200"
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyConstructionPrompt()}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs hover:bg-slate-800"
+                >
+                  {constructionCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  {constructionCopied ? 'Đã chép' : 'Sao chép'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || cooldownSeconds > 0}
+                  onClick={() => void insertConstruction()}
+                  className="flex items-center justify-center gap-1 rounded-lg bg-amber-600 py-2 text-xs font-bold text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {cooldownSeconds > 0 ? `Chờ ${cooldownSeconds}s` : 'Chèn vào Gemini'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSource(constructionCompiled.prompt);
+                  setDomain(constructionOutputType === 'image' ? 'image' : 'video');
+                  switchTab('standard');
+                  setStatus('Đã nạp prompt thi công sang tab Tiêu chuẩn.');
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-700 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Chuyển sang tab Tiêu chuẩn</span>
+              </button>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* VÙNG NHẬP PHẢN HỒI VÀ SNAPSHOT */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xs font-bold">Phản hồi từ Gemini</h2>
-          <button type="button" disabled={busy} onClick={() => void importResponse()} className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300 disabled:opacity-50"><ClipboardPaste className="h-3.5 w-3.5" />Nhập phản hồi</button>
+          <button type="button" disabled={busy} onClick={() => void importResponse()} className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] text-emerald-300 disabled:opacity-50">
+            <ClipboardPaste className="h-3.5 w-3.5" />Nhập phản hồi
+          </button>
         </div>
         <textarea value={response} onChange={(event) => setResponse(event.target.value)} className="min-h-24 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs leading-relaxed" placeholder="Chỉ được đọc khi bạn bấm Nhập phản hồi; ưu tiên phần văn bản đang chọn." />
-        <button type="button" onClick={() => void saveSnapshot()} className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-[11px] hover:bg-slate-800"><FileClock className="h-3.5 w-3.5" />Lưu snapshot prompt + phản hồi</button>
+        <button type="button" onClick={() => void saveSnapshot()} className="flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-[11px] hover:bg-slate-800">
+          <FileClock className="h-3.5 w-3.5" />Lưu snapshot prompt + phản hồi
+        </button>
         {snapshots.length > 0 && <p className="text-[10px] text-slate-500">Đang lưu {snapshots.length}/10 snapshot gần nhất trên thiết bị.</p>}
       </section>
 

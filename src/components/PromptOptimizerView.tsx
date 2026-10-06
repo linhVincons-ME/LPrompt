@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { PromptDomain } from '../types';
 import { createLocalOptimizationResult, optimizePromptLocally, type OptimizationResult } from '../services/optimizer';
-import { compilePromptFramework, FRAMEWORK_OPTIONS, type OutputLanguage, type PromptFramework } from '../services/frameworkCompiler';
+import { compilePromptFramework, type OutputLanguage } from '../services/frameworkCompiler';
 import {
   Sparkles,
   ArrowRight,
@@ -9,7 +9,6 @@ import {
   Check,
   RotateCcw,
   CheckCircle2,
-  Sliders,
   Send,
   Loader2,
   FileCheck,
@@ -44,7 +43,6 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
 }) => {
   const [inputPrompt, setInputPrompt] = useState(currentPrompt);
   const [selectedGoal, setSelectedGoal] = useState('production_ready');
-  const [selectedFramework, setSelectedFramework] = useState<PromptFramework>('AUTO');
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>('vi');
   const [customInstruction, setCustomInstruction] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -77,7 +75,6 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
         inputPrompt,
         domain,
         getGoalInstruction(outputLanguage),
-        selectedFramework,
         instructionOverride,
         outputLanguage
       );
@@ -93,7 +90,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
     setOutputLanguage(language);
     if (!optimizationResult || !inputPrompt.trim()) return;
     try {
-      const compiled = compilePromptFramework(inputPrompt, selectedFramework, {
+      const compiled = compilePromptFramework(inputPrompt, 'STANDARD', {
         domain,
         goal: getGoalInstruction(language),
         additionalInstruction: customInstruction,
@@ -124,7 +121,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white tracking-tight m-0">LPrompt Framework Compiler</h2>
+              <h2 className="text-base font-bold text-white tracking-tight m-0">LPrompt Compiler</h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                 LOCAL-FIRST v3.0
               </span>
@@ -140,12 +137,11 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
         </span>
       </div>
 
-      {/* Control Panel: Goal & Framework Selection */}
+      {/* Control Panel */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md space-y-4">
         <div className="space-y-2">
           <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-            <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-            1. Chọn Mục Tiêu Chỉnh Sửa Mong Muốn:
+            1. Chọn mục tiêu chỉnh sửa:
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {goals.map((g) => (
@@ -165,30 +161,8 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           </div>
         </div>
 
-        {/* Framework & Custom Instruction */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-2 border-t border-slate-800/80">
-          {/* Framework Choice */}
-          <div className="md:col-span-4 space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">Khung Kỹ Thuật (Framework):</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {FRAMEWORK_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => { setSelectedFramework(option.id); setOptimizationResult(null); }}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all text-center ${
-                    selectedFramework === option.id
-                      ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/20'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                    {option.label}
-                  </button>
-                ))}
-            </div>
-          </div>
-
-          {/* Custom user instruction */}
-          <div className="md:col-span-8 space-y-1.5">
+        <div className="pt-2 border-t border-slate-800/80">
+          <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">
               Chỉ Thị Bổ Sung (Tùy chọn):
             </label>
@@ -236,7 +210,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
           <textarea
             value={inputPrompt}
             onChange={(e) => { setInputPrompt(e.target.value); setOptimizationResult(null); }}
-            placeholder="Nhập prompt thô cần biên dịch theo framework..."
+            placeholder="Nhập yêu cầu cần biên dịch..."
             className="w-full flex-1 min-h-[260px] p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-indigo-500 resize-y"
           />
 
@@ -405,7 +379,7 @@ export const PromptOptimizerView: React.FC<PromptOptimizerViewProps> = ({
               <span>Báo Cáo Biên Dịch (Audit Log)</span>
             </h3>
             <span className="text-xs font-mono text-purple-300">
-              Khung áp dụng: {optimizationResult.framework_applied}
+              Bộ biên dịch: {optimizationResult.compiler_applied}
             </span>
           </div>
 

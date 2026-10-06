@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 extension-dist
+extension-dist-firefox
+web-ext-artifacts
 service/windows/runtime/
 dist-ssr
 *.local

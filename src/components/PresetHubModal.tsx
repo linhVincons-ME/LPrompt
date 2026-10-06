@@ -141,12 +141,9 @@ export const PresetHubModal: React.FC<PresetHubModalProps> = ({
                 className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-teal-500/40 flex flex-col justify-between transition-all group hover:shadow-xl hover:shadow-teal-950/20"
               >
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 uppercase tracking-wider">
                       {preset.category}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 font-semibold">
-                      {preset.framework}
                     </span>
                   </div>
 
@@ -205,9 +202,7 @@ export const PresetHubModal: React.FC<PresetHubModalProps> = ({
               <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
                 <div>
                   <h3 className="text-sm font-bold text-white">{activePreset.title}</h3>
-                  <span className="text-[11px] text-teal-400 font-mono">
-                    Khung: {activePreset.framework} • Dùng được với Gemini Web qua extension
-                  </span>
+                  <span className="text-[11px] text-teal-400 font-mono">Dùng được với Gemini Web qua extension</span>
                 </div>
                 <button
                   onClick={() => setActivePreset(null)}
