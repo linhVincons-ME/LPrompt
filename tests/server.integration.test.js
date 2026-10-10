@@ -71,6 +71,31 @@ describe('local service and MCP integration', () => {
     expect(removed.success).toBe(true);
   });
 
+  it('deletes prompts atomically, unlinking versions by default and deleting them on request', async () => {
+    const base = `http://127.0.0.1:${service.port}`;
+    const json = { 'Content-Type': 'application/json' };
+    const savePromptRecord = (id) => fetch(`${base}/api/prompts`, { method: 'POST', headers: json, body: JSON.stringify({ id, title: id, domain: 'research', original_prompt: 'viết', improved_prompt: 'viết', score: 10, tier: 'Yếu', tags: [] }) });
+    const saveLinkedVersion = (id, promptId) => fetch(`${base}/api/versions`, { method: 'POST', headers: json, body: JSON.stringify({ id, versionNumber: `main@${id}`, commitMessage: id, content: 'viết', stage: 'draft', createdAt: new Date().toISOString(), branchName: 'main', contentHash: id, promptId }) });
+    const versionIds = async () => (await fetch(`${base}/api/versions`).then((res) => res.json())).data.map((version) => [version.id, version.promptId ?? null]);
+
+    expect((await savePromptRecord('prompt-keep')).status).toBe(201);
+    expect((await saveLinkedVersion('version-keep', 'prompt-keep')).status).toBe(201);
+    const kept = await fetch(`${base}/api/prompts/prompt-keep`, { method: 'DELETE' });
+    expect(kept.status).toBe(200);
+    expect((await kept.json()).success).toBe(true);
+    expect(await versionIds()).toContainEqual(['version-keep', null]);
+
+    expect((await savePromptRecord('prompt-drop')).status).toBe(201);
+    expect((await saveLinkedVersion('version-drop', 'prompt-drop')).status).toBe(201);
+    const dropped = await fetch(`${base}/api/prompts/prompt-drop?versions=delete`, { method: 'DELETE' });
+    expect(dropped.status).toBe(200);
+    expect((await dropped.json()).success).toBe(true);
+    expect((await versionIds()).map(([id]) => id)).not.toContain('version-drop');
+    const prompts = (await fetch(`${base}/api/prompts`).then((res) => res.json())).data.map((prompt) => prompt.id);
+    expect(prompts).not.toContain('prompt-keep');
+    expect(prompts).not.toContain('prompt-drop');
+  });
+
   it('speaks official MCP Streamable HTTP', async () => {
     const client = new Client({ name: 'lprompt-test', version: '1.0.0' });
     const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${service.port}/mcp`));

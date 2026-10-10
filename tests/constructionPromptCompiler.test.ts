@@ -256,4 +256,22 @@ describe('construction prompt compiler', () => {
     });
     expect(expandedCheck.issues.filter((issue) => issue.code === 'duplicate-no-text')).toHaveLength(3);
   });
+
+  it('keeps compound nouns that start with chữ/text and removes whole negated clauses', () => {
+    const opts = { outputType: 'image' as const, aspectRatio: '16:9' as const, participantCount: 1 };
+    for (const phrase of ['Không có chữ số trên biển báo', 'Không có chữ viết tay', 'Không có chữ trên cột điện', 'Không có text box']) {
+      const result = inspectConstructionAdditionalRequirements(phrase, opts);
+      expect(result.issues.some((issue) => issue.code === 'duplicate-no-text'), phrase).toBe(false);
+      expect(result.normalized, phrase).toContain(phrase);
+    }
+
+    const placed = inspectConstructionAdditionalRequirements('Không chèn chữ lên ảnh', opts);
+    expect(placed.issues.some((issue) => issue.code === 'duplicate-no-text')).toBe(true);
+    expect(placed.normalized.trim()).toBe('');
+
+    const media = inspectConstructionAdditionalRequirements('Không có âm thanh nào, nền xanh', opts);
+    expect(media.issues.some((issue) => issue.code === 'duplicate-no-media')).toBe(true);
+    expect(media.normalized).toContain('nền xanh');
+    expect(media.normalized).not.toContain('nào');
+  });
 });

@@ -11,4 +11,14 @@ describe('server modules plain Node import compatibility', () => {
       );
     }).not.toThrow();
   });
+
+  it('loads presetsData (re-exports a .ts module) in plain Node', () => {
+    expect(() => {
+      execFileSync(
+        process.execPath,
+        ['-e', "import('./server/presetsData.js').then(m => { if (!Array.isArray(m.FABRIC_PRESETS) || m.FABRIC_PRESETS.length === 0) process.exit(1); })"],
+        { stdio: 'pipe' }
+      );
+    }).not.toThrow();
+  });
 });

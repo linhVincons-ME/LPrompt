@@ -116,9 +116,11 @@ export function inspectConstructionAdditionalRequirements(
 
     if (options.outputType === 'image') {
       const mediaTerms = `(?:âm thanh|nhạc nền|giọng đọc|thu âm|thời lượng|\\d+\\s*giây)${END}`;
+      // Nuốt luôn phần bổ nghĩa ngắn ("âm thanh hiện trường", "âm thanh nào") để không để lại mẩu câu vô nghĩa.
+      const mediaItem = `${mediaTerms}(?:\\s+(?:nào|gì|hiện trường|môi trường|xung quanh)${END})?`;
       const negatedMedia = new RegExp(
-        `(?:không|cấm|bỏ|tắt|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|dùng\\s+|kèm\\s+|chứa\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${mediaTerms}` +
-        `(?:\\s*(?:,|và|hoặc|hay)\\s*${mediaTerms})*`,
+        `(?:không|cấm|bỏ|tắt|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|dùng\\s+|kèm\\s+|chứa\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${mediaItem}` +
+        `(?:\\s*(?:,|và|hoặc|hay)\\s*${mediaItem})*`,
         'giu'
       );
       const mediaPattern = new RegExp(`(?<![\\p{L}\\p{N}])${mediaTerms}`, 'iu');
@@ -141,10 +143,14 @@ export function inspectConstructionAdditionalRequirements(
       issues.push({ severity: 'error', code: 'text-overlay-conflict', message: 'Yêu cầu chèn chữ hoặc phụ đề mâu thuẫn với quy tắc bổ sung chữ ở hậu kỳ.' });
     }
 
-    const textTerms = `(?:phụ đề${END}|watermark${END}|text${END}|chữ(?:\\s*trên\\s*(?:ảnh|video))?${END}(?!\\s+ký${END}))`;
+    // "chữ"/"text" chỉ là đối tượng của câu phủ định khi đứng cuối mệnh đề. Nhờ vậy các từ ghép như
+    // "chữ số", "chữ ký", "chữ viết tay", "text box" hay "chữ trên cột điện" được giữ nguyên.
+    const clauseEnd = '(?=\\s*(?:$|[,.;:!?]|(?:và|hoặc|hay)(?![\\p{L}\\p{N}])))';
+    const textPlace = `(?:\\s+(?:lên|trên|vào|ở)\\s+(?:hình ảnh|ảnh|video|hình|khung hình)${END})?`;
+    const textItem = `(?:phụ đề|watermark|text|chữ)${END}${textPlace}(?:\\s+nào${END})?${clauseEnd}`;
     const negatedTextPattern = new RegExp(
-      `(?:không|cấm|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|chèn\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${textTerms}(?:\\s+nào)?` +
-      `(?:\\s*(?:,|và|hoặc|hay)\\s*${textTerms})*`,
+      `(?:không|cấm|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|chèn\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${textItem}` +
+      `(?:\\s*(?:,|và|hoặc|hay)\\s*${textItem})*`,
       'giu'
     );
     if (negatedTextPattern.test(lowerCurrent)) {

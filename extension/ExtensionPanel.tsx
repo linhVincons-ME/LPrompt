@@ -246,6 +246,9 @@ export function ExtensionPanel() {
       const savedTab = stored[STORAGE_KEYS.activeTab] as 'standard' | 'construction' | undefined;
       if (savedTab === 'standard' || savedTab === 'construction') {
         setActiveTab(savedTab);
+        // Đồng bộ ref ngay: effect cập nhật activeTabRef chưa chạy, mà applySelection bên dưới đọc ref
+        // để quyết định đổ đoạn bôi chọn vào tab nào.
+        activeTabRef.current = savedTab;
       }
       setSnapshots((stored[STORAGE_KEYS.snapshots] as Snapshot[] | undefined) ?? []);
       setResponse((stored[STORAGE_KEYS.lastResponse] as string | undefined) ?? '');

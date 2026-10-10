@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 const manifest = JSON.parse(readFileSync(new URL('../extension/public/manifest.json', import.meta.url), 'utf8')) as {
@@ -37,8 +38,19 @@ describe('extension safety contract', () => {
 
   it('keeps the content script self-contained for classic MV3 injection', () => {
     expect(contentScript).toContain('classifyTransientFailure');
-    const builtChromeContentScript = readFileSync(new URL('../extension-dist/contentScript.js', import.meta.url), 'utf8');
-    expect(builtChromeContentScript).not.toMatch(/^import\s/m);
+    // Content script (và background của Firefox) được nạp dạng classic script: không được có `import`.
+    // Parse bằng vm.Script: câu lệnh import (kể cả dạng đã nén `import{…}from"…"`) là lỗi cú pháp với classic script.
+    const classicBundles = [
+      'extension-dist/contentScript.js',
+      'extension-dist-firefox/contentScript.js',
+      'extension-dist-firefox/serviceWorker.js'
+    ];
+    for (const bundle of classicBundles) {
+      const fileUrl = new URL(`../${bundle}`, import.meta.url);
+      if (!existsSync(fileUrl)) throw new Error(`Thiếu ${bundle}. Hãy chạy "npm run build:extension" trước khi chạy test.`);
+      const code = readFileSync(fileUrl, 'utf8');
+      expect(() => new vm.Script(code, { filename: bundle }), bundle).not.toThrow();
+    }
   });
 
   it('imports only explicit user selection through the context menu', () => {

@@ -108,12 +108,28 @@ export function savePrompt(prompt) {
   return prompt;
 }
 
-export function deletePrompt(id) {
-  const deleteTx = db.transaction((promptId) => {
-    db.prepare('DELETE FROM prompt_versions WHERE prompt_id = ?').run(promptId);
-    return db.prepare('DELETE FROM prompts WHERE id = ?').run(promptId);
+function runInTransaction(work) {
+  // node:sqlite (DatabaseSync) không có db.transaction() như better-sqlite3, nên tự quản lý BEGIN/COMMIT.
+  db.exec('BEGIN');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function deletePrompt(id, { deleteVersions = false } = {}) {
+  // Mặc định chỉ gỡ liên kết prompt_id để không âm thầm xóa lịch sử version;
+  // web app tự xóa từng version khi người dùng xác nhận.
+  const result = runInTransaction(() => {
+    db.prepare(deleteVersions
+      ? 'DELETE FROM prompt_versions WHERE prompt_id = ?'
+      : 'UPDATE prompt_versions SET prompt_id = NULL WHERE prompt_id = ?').run(id);
+    return db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
   });
-  const result = deleteTx(id);
   autoBackupSnapshot();
   return { success: result.changes > 0, id };
 }

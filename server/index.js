@@ -92,7 +92,7 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
   });
   app.get('/api/prompts', (_req, res) => res.json({ success: true, data: getAllPrompts() }));
   app.post('/api/prompts', (req, res) => res.status(201).json({ success: true, data: savePrompt(promptSchema.parse(req.body)) }));
-  app.delete('/api/prompts/:id', (req, res) => res.json(deletePrompt(req.params.id)));
+  app.delete('/api/prompts/:id', (req, res) => res.json(deletePrompt(req.params.id, { deleteVersions: req.query.versions === 'delete' })));
   app.get('/api/versions', (req, res) => {
     const branchName = typeof req.query.branch === 'string' ? req.query.branch : undefined;
     const data = getAllVersions(branchName);

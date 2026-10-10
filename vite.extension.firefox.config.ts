@@ -13,7 +13,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         sidepanel: resolve(import.meta.dirname, 'extension/sidepanel.html'),
-        contentScript: resolve(import.meta.dirname, 'extension/contentScript.ts'),
         serviceWorker: resolve(import.meta.dirname, 'extension/serviceWorker.ts')
       },
       output: {

@@ -810,12 +810,48 @@ export function App() {
           setSavedPrompts(filtered);
           safeStorageSet('lprompt_saved_prompts', filtered);
 
-          const orphanedVersions = versions.filter((v) => v.promptId === id);
-          if (orphanedVersions.length > 0) {
-            orphanedVersions.forEach((v) => queueDeletion('versions', v.id));
-            const remainingVersions = versions.filter((v) => v.promptId !== id);
-            setVersions(remainingVersions);
-            safeStorageSet('lprompt_versions', remainingVersions);
+          // Phiên bản được liên kết bằng so khớp nội dung nên có thể là lịch sử người dùng muốn giữ:
+          // hỏi trước, mặc định (Cancel) chỉ bỏ liên kết — khớp hành vi mặc định của API xóa prompt.
+          const linkedVersions = versions.filter((v) => v.promptId === id);
+          if (linkedVersions.length > 0) {
+            const deleteLinked = window.confirm(
+              `Prompt này có ${linkedVersions.length} phiên bản liên kết.\nOK: xóa luôn các phiên bản này.\nCancel: giữ lại phiên bản, chỉ bỏ liên kết với prompt.`
+            );
+            const linkedIds = new Set(linkedVersions.map((v) => v.id));
+            const removedIds = new Set<string>();
+            if (deleteLinked) {
+              // Không xóa commit đang là cha của commit còn lại để đồ thị phiên bản không bị đứt.
+              const removable = new Set(linkedIds);
+              let changed = true;
+              while (changed) {
+                changed = false;
+                for (const versionId of removable) {
+                  if (versions.some((v) => !removable.has(v.id) && (v.parentId === versionId || v.mergeParentId === versionId))) {
+                    removable.delete(versionId);
+                    changed = true;
+                  }
+                }
+              }
+              for (const version of linkedVersions) {
+                if (!removable.has(version.id)) continue;
+                if (!queueDeletion('versions', version.id)) break;
+                removedIds.add(version.id);
+              }
+              if (removedIds.size < linkedVersions.length) {
+                setAuditError(`Đã giữ lại ${linkedVersions.length - removedIds.size} phiên bản (đang là commit cha hoặc không lưu được yêu cầu xóa); chúng chỉ được bỏ liên kết.`);
+              }
+            }
+            const remainingVersions = versions
+              .filter((v) => !removedIds.has(v.id))
+              .map((v) => (linkedIds.has(v.id) ? { ...v, promptId: undefined } : v));
+            handleSaveVersions(remainingVersions);
+            const [firstRemoved] = removedIds;
+            if (firstRemoved) {
+              // deleteServerVersion đẩy toàn bộ hàng đợi xóa phiên bản, nên chỉ cần gọi một lần.
+              void deleteServerVersion(firstRemoved).then((deleted) => {
+                if (!deleted) setAuditError('Đã xóa phiên bản cục bộ; thao tác xóa SQLite đang chờ đồng bộ lại.');
+              });
+            }
           }
 
           void deleteServerPrompt(id).then((deleted) => {
