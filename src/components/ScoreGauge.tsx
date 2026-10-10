@@ -36,7 +36,7 @@ export const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score, tier, isAuditing 
     <div className={`relative p-5 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col items-center justify-center backdrop-blur-md ${glowClass} transition-all duration-300`}>
       <div className="absolute top-3 left-3 flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border bg-slate-950/70 border-slate-800 text-slate-400">
         <Cpu className="w-3 h-3 text-slate-400" />
-        <span>Local Engine (0đ)</span>
+        <span>Độ đầy đủ cấu trúc</span>
       </div>
 
       <div className="relative w-36 h-36 flex items-center justify-center my-2">

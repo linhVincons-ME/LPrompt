@@ -77,11 +77,13 @@ describe('local service and MCP integration', () => {
     await client.connect(transport);
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name)).toContain('lprompt_commit_version');
-    const called = await client.callTool({ name: 'lprompt_evaluate', arguments: { prompt: 'Bạn là chuyên gia. Nhiệm vụ: hãy viết định dạng JSON. Ràng buộc: không được bịa. Ví dụ: mẫu dữ liệu.' } });
+    const called = await client.callTool({ name: 'lprompt_evaluate', arguments: { prompt: 'Bạn là chuyên gia. Ngữ cảnh: dự án tài chính. Nhiệm vụ: hãy viết theo các bước: bước 1 phân tích, bước 2 báo cáo. Ràng buộc: không được bịa, giới hạn 500 từ. Định dạng: mẫu JSON, chỉ trả về kết quả. Ví dụ: sample input và output.' } });
     expect(called.content[0].text).toContain('deterministic-local-heuristic');
     const parsed = JSON.parse(called.content[0].text);
     expect(parsed.score).toBe(100);
     expect(parsed.tier).toContain('Xuất sắc');
+    expect(parsed.breakdown.role_context).toBe(20);
+    expect(parsed.breakdown.task_clarity).toBe(25);
     await client.close();
   });
 });

@@ -58,7 +58,7 @@ export const ScoreBreakdownCard: React.FC<ScoreBreakdownCardProps> = ({ breakdow
     <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 backdrop-blur-md flex flex-col gap-5">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <h3 className="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-          <span>Quy tắc tiền tố 100 điểm</span>
+          <span>Độ đầy đủ cấu trúc (100 điểm)</span>
         </h3>
         <span className="text-xs text-slate-400">Tiêu chuẩn PromptOps</span>
       </div>

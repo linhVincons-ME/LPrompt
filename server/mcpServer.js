@@ -4,25 +4,29 @@ import * as z from 'zod/v4';
 import { getAllVersions, saveVersion } from './db.js';
 import { FABRIC_PRESETS } from './presetsData.js';
 
-export function evaluatePromptLocally(prompt) {
-  const text = String(prompt || '');
-  const signals = [
-    /(?<![\p{L}\p{N}])(?:you are|act as|bạn là|vai trò)(?![\p{L}\p{N}])/iu,
-    /(?<![\p{L}\p{N}])(?:task|nhiệm vụ|mục tiêu|hãy)(?![\p{L}\p{N}])/iu,
-    /(?<![\p{L}\p{N}])(?:constraint|must|must not|không được|ràng buộc)(?![\p{L}\p{N}])/iu,
-    /(?<![\p{L}\p{N}])(?:json|markdown|output|định dạng|schema)(?![\p{L}\p{N}])/iu,
-    /(?<![\p{L}\p{N}])(?:example|ví dụ|context|ngữ cảnh|input)(?![\p{L}\p{N}])/iu
-  ];
-  const score = Math.min(100, 25 + signals.filter((signal) => signal.test(text)).length * 15);
-  return { score, tier: score >= 90 ? 'Xuất sắc (Production)' : score >= 75 ? 'Khá' : 'Cần tối ưu', evaluatedPromptLength: text.length, method: 'deterministic-local-heuristic' };
+import { evaluatePromptLocally as evaluateFullPromptLocally } from '../src/services/evaluator.ts';
+
+export function evaluatePromptLocally(prompt, domain = 'research') {
+  const result = evaluateFullPromptLocally(prompt, domain || 'research');
+  return {
+    score: result.total_score,
+    total_score: result.total_score,
+    tier: result.tier,
+    breakdown: result.breakdown,
+    critique: result.critique,
+    evaluatedPromptLength: String(prompt || '').length,
+    method: 'deterministic-local-heuristic',
+    domain: domain || 'research',
+    target_domain: result.target_domain || domain || 'research'
+  };
 }
 
 export function createLPromptMcpServer() {
   const server = new McpServer({ name: 'lprompt-service', version: '3.0.0' });
   server.registerTool('lprompt_evaluate', {
-    description: 'Đánh giá nhanh cấu trúc prompt bằng heuristic cục bộ, không gọi mô hình AI.',
+    description: 'Đánh giá độ đầy đủ cấu trúc prompt bằng heuristic cục bộ, không gọi mô hình AI.',
     inputSchema: { prompt: z.string().min(1).max(100_000), domain: z.enum(['research', 'image', 'video', 'code', 'audio']).optional() }
-  }, async ({ prompt, domain }) => ({ content: [{ type: 'text', text: JSON.stringify({ ...evaluatePromptLocally(prompt), domain: domain || 'research' }, null, 2) }] }));
+  }, async ({ prompt, domain }) => ({ content: [{ type: 'text', text: JSON.stringify(evaluatePromptLocally(prompt, domain || 'research'), null, 2) }] }));
 
   server.registerTool('lprompt_list_presets', {
     description: 'Tìm mẫu prompt trong kho preset tích hợp.',

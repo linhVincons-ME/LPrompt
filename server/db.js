@@ -109,6 +109,7 @@ export function savePrompt(prompt) {
 }
 
 export function deletePrompt(id) {
+  db.prepare('DELETE FROM prompt_versions WHERE prompt_id = ?').run(id);
   const result = db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
   autoBackupSnapshot();
   return { success: result.changes > 0, id };
@@ -199,11 +200,55 @@ function writeJsonAtomic(targetPath, data) {
   fs.renameSync(temporaryPath, targetPath);
 }
 
-export function autoBackupSnapshot() {
+const MAX_BACKUP_SNAPSHOTS = 10;
+const SNAPSHOT_THROTTLE_MS = 60_000;
+let lastBackupAt = 0;
+let backupThrottleTimer = null;
+
+function pruneOldBackups(keepCount = MAX_BACKUP_SNAPSHOTS) {
+  try {
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter((file) => file.startsWith('lprompt_snapshot_') && file.endsWith('.json'))
+      .map((file) => {
+        const fullPath = path.join(BACKUPS_DIR, file);
+        return { file, fullPath, mtime: fs.statSync(fullPath).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (files.length > keepCount) {
+      for (const item of files.slice(keepCount)) {
+        try { fs.unlinkSync(item.fullPath); } catch {}
+      }
+    }
+  } catch (error) {
+    console.warn('[LPrompt DB] Prune backups warning:', error instanceof Error ? error.message : error);
+  }
+}
+
+export function autoBackupSnapshot(force = false) {
+  const now = Date.now();
+  if (!force && now - lastBackupAt < SNAPSHOT_THROTTLE_MS) {
+    if (!backupThrottleTimer) {
+      backupThrottleTimer = setTimeout(() => {
+        backupThrottleTimer = null;
+        autoBackupSnapshot(true);
+      }, SNAPSHOT_THROTTLE_MS);
+      backupThrottleTimer.unref?.();
+    }
+    return null;
+  }
+
+  if (backupThrottleTimer) {
+    clearTimeout(backupThrottleTimer);
+    backupThrottleTimer = null;
+  }
+  lastBackupAt = now;
+
   try {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const backupFile = path.join(BACKUPS_DIR, `lprompt_snapshot_${today}.json`);
     writeJsonAtomic(backupFile, collectBackupData());
+    pruneOldBackups();
     return backupFile;
   } catch (error) {
     console.warn('[LPrompt DB] Backup snapshot warning:', error instanceof Error ? error.message : error);
@@ -220,6 +265,11 @@ export function exportFullBackup() {
 }
 
 export function closeDatabase() {
+  if (backupThrottleTimer) {
+    clearTimeout(backupThrottleTimer);
+    backupThrottleTimer = null;
+    autoBackupSnapshot(true);
+  }
   try { db.close(); } catch (error) {
     if (!String(error?.message || error).includes('not open')) throw error;
   }

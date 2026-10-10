@@ -6,14 +6,44 @@ export function calculateTier(score: number): QualityTier {
   if (score >= 50) return 'Trung bình';
   return 'Yếu';
 }
+export interface ExtractedPromptContent {
+  userContent: string;
+  isWrapped: boolean;
+  effectiveUserText: string;
+}
+
+export function extractPromptContent(prompt: string): ExtractedPromptContent {
+  const match = prompt.match(/<(?:yeu_cau_nguoi_dung|user_request)>([\s\S]*?)<\/(?:yeu_cau_nguoi_dung|user_request)>/i);
+  if (!match) {
+    const trimmed = prompt.trim();
+    return {
+      userContent: trimmed,
+      isWrapped: false,
+      effectiveUserText: trimmed
+    };
+  }
+
+  const userContent = match[1].trim();
+  const extrasMatch = prompt.match(/\[(?:MỤC TIÊU BỔ SUNG|CHỈ THỊ BỔ SUNG|TÙY CHỌN ĐẦU RA|ADDITIONAL GOAL|ADDITIONAL INSTRUCTION|OUTPUT OPTIONS)\][\s\S]*$/i);
+  const extras = extrasMatch ? extrasMatch[0].trim() : '';
+
+  return {
+    userContent,
+    isWrapped: true,
+    effectiveUserText: extras ? `${userContent}\n\n${extras}` : userContent
+  };
+}
+
 /**
  * Đánh giá Prompt cục bộ bằng Heuristic & Regex Chuẩn Song Ngữ (Việt - Anh & Thẻ tiền tố Kỹ thuật)
- * 100% MIỄN PHÍ, chạy trên Client 0ms với độ chính xác cao
+ * Đo lường độ đầy đủ cấu trúc PromptOps (100% MIỄN PHÍ, chạy trên Client/MCP 0ms).
  */
-export function evaluatePromptLocally(prompt: string, domain: PromptDomain): PromptEvaluation {
+export function evaluatePromptLocally(prompt: string, domain: PromptDomain = 'research'): PromptEvaluation {
   const p = prompt.trim();
+  const { userContent, isWrapped, effectiveUserText } = extractPromptContent(p);
+  const wordCount = effectiveUserText ? effectiveUserText.split(/\s+/).length : 0;
   const lower = p.toLowerCase();
-  const wordCount = p ? p.split(/\s+/).length : 0;
+  const userLower = effectiveUserText.toLowerCase();
 
   let roleScore = 0;
   let taskScore = 0;
@@ -108,12 +138,14 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /trường hợp sử dụng/i
   ];
 
-  const hasRole = rolePatterns.some((rgx) => rgx.test(lower));
-  const hasContext = contextPatterns.some((rgx) => rgx.test(lower));
+  const hasRole = isWrapped || rolePatterns.some((rgx) => rgx.test(lower));
+  const hasContext = contextPatterns.some((rgx) => rgx.test(userLower));
 
   if (hasRole) {
     roleScore += 10;
-    pros.push('Đã định danh vai trò chuyên gia (Role/Persona rõ ràng)');
+    pros.push(isWrapped
+      ? 'Đã tích hợp vai trò chuyên gia chuẩn hóa từ khung mẫu PromptOps'
+      : 'Đã định danh vai trò chuyên gia (Role/Persona rõ ràng)');
   } else {
     missing.push('Chưa xác định vai trò chuyên gia (VD: "Bạn là Senior Architect..." hoặc "[ROLE]: Expert...")');
   }
@@ -122,7 +154,9 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     roleScore += 10;
     pros.push('Có cung cấp bối cảnh/mục tiêu cụ thể (Context & Objective)');
   } else {
-    missing.push('Bối cảnh bài toán còn quá ngắn hoặc chưa rõ mục tiêu cốt lõi');
+    missing.push(isWrapped
+      ? 'Yêu cầu người dùng còn ngắn, chưa cung cấp bối cảnh cụ thể hoặc mục tiêu cốt lõi'
+      : 'Bối cảnh bài toán còn quá ngắn hoặc chưa rõ mục tiêu cốt lõi');
   }
 
   // =========================================================================
@@ -214,8 +248,8 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /(^|\n)\s*-\s+/i
   ];
 
-  const hasActionVerb = actionVerbPatterns.some((rgx) => rgx.test(lower));
-  const hasSteps = stepsPatterns.some((rgx) => rgx.test(lower));
+  const hasActionVerb = actionVerbPatterns.some((rgx) => rgx.test(userLower));
+  const hasSteps = stepsPatterns.some((rgx) => rgx.test(userLower));
 
   if (hasActionVerb) {
     taskScore += 15;
@@ -305,12 +339,14 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /formal/i
   ];
 
-  const hasNegative = negativePatterns.some((rgx) => rgx.test(lower));
-  const hasLimits = limitPatterns.some((rgx) => rgx.test(lower));
+  const hasNegative = isWrapped || negativePatterns.some((rgx) => rgx.test(lower));
+  const hasLimits = limitPatterns.some((rgx) => rgx.test(userLower));
 
   if (hasNegative) {
     constraintScore += 10;
-    pros.push('Có quy định điều cấm kỵ / Rào chắn lỗi (Negative constraints / Guardrails)');
+    pros.push(isWrapped
+      ? 'Đã áp dụng nguyên tắc guardrail / chống ảo giác từ khung mẫu PromptOps'
+      : 'Có quy định điều cấm kỵ / Rào chắn lỗi (Negative constraints / Guardrails)');
   } else {
     missing.push('Chưa có danh sách điều KHÔNG ĐƯỢC LÀM (Negative rules) để tránh AI suy diễn sai');
   }
@@ -379,12 +415,14 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /just the code/i
   ];
 
-  const hasFormat = formatPatterns.some((rgx) => rgx.test(lower));
-  const hasStrictFormat = strictFormatPatterns.some((rgx) => rgx.test(lower));
+  const hasFormat = isWrapped || formatPatterns.some((rgx) => rgx.test(lower));
+  const hasStrictFormat = strictFormatPatterns.some((rgx) => rgx.test(userLower));
 
   if (hasFormat) {
     formatScore += 12;
-    pros.push('Có chỉ định cấu trúc định dạng đầu ra (Output Format / Schema)');
+    pros.push(isWrapped
+      ? 'Đã có chỉ dẫn tuân thủ cấu trúc định dạng đầu ra'
+      : 'Có chỉ định cấu trúc định dạng đầu ra (Output Format / Schema)');
   } else {
     missing.push('Chưa yêu cầu rõ định dạng output (VD: Markdown table, JSON Schema, hoặc Code block)');
   }
@@ -403,19 +441,19 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
   let domainSpecsBonus = false;
 
   if (domain === 'image') {
-    domainSpecsBonus = /(shot on|hasselblad|canon|sony|nikon|lens|85mm|35mm|50mm|16mm|f\/1\.[0-9]|f\/2\.[0-9]|bokeh|depth of field|volumetric|golden hour|chiaroscuro|lighting|8k|4k|uhd|photorealistic|hyper-realistic|octane|unreal engine|--ar|--v|--style|aspect ratio|close-up|portrait|ống kính|tiêu cự|xóa phông|độ sâu trường ảnh|ánh sáng|độ phân giải cao|tỷ lệ|cận cảnh|toàn cảnh|chân dung)/i.test(lower);
+    domainSpecsBonus = /(shot on|hasselblad|canon|sony|nikon|lens|85mm|35mm|50mm|16mm|f\/1\.[0-9]|f\/2\.[0-9]|bokeh|depth of field|volumetric|golden hour|chiaroscuro|lighting|8k|4k|uhd|photorealistic|hyper-realistic|octane|unreal engine|--ar|--v|--style|aspect ratio|close-up|portrait|ống kính|tiêu cự|xóa phông|độ sâu trường ảnh|ánh sáng|độ phân giải cao|tỷ lệ|cận cảnh|toàn cảnh|chân dung)/i.test(userLower);
   } else if (domain === 'video') {
-    domainSpecsBonus = /(camera movement|dolly|pan|tilt|zoom|fpv|drone|tracking shot|fps|24fps|60fps|motion speed|motion factor|cinematic|aspect ratio|2\.39:1|16:9|first frame|last frame|parallax|temporal|chuyển động camera|tốc độ chuyển động|điện ảnh|tỷ lệ khung hình|khung hình đầu)/i.test(lower);
+    domainSpecsBonus = /(camera movement|dolly|pan|tilt|zoom|fpv|drone|tracking shot|fps|24fps|60fps|motion speed|motion factor|cinematic|aspect ratio|2\.39:1|16:9|first frame|last frame|parallax|temporal|chuyển động camera|tốc độ chuyển động|điện ảnh|tỷ lệ khung hình|khung hình đầu)/i.test(userLower);
   } else if (domain === 'code') {
-    domainSpecsBonus = /(typescript|python|golang|rust|c\+\+|java|react|fastapi|docker|clean architecture|solid|pydantic|pytest|jest|unit test|benchmark|async\/await|error handling|type hints|docstrings|ast|kiểm thử|xử lý lỗi|bắt ngoại lệ)/i.test(lower);
+    domainSpecsBonus = /(typescript|python|golang|rust|c\+\+|java|react|fastapi|docker|clean architecture|solid|pydantic|pytest|jest|unit test|benchmark|async\/await|error handling|type hints|docstrings|ast|kiểm thử|xử lý lỗi|bắt ngoại lệ)/i.test(userLower);
   } else if (domain === 'audio') {
-    domainSpecsBonus = /(\[intro[^\]]*\]|\[verse[^\]]*\]|\[chorus[^\]]*\]|\[bridge[^\]]*\]|\[outro[^\]]*\]|bpm|key of|tempo|acoustic|guitar|piano|lo-fi|vinyl|reverb|vocals|suno|udio|giai điệu|tiết tấu|hòa âm)/i.test(lower);
+    domainSpecsBonus = /(\[intro[^\]]*\]|\[verse[^\]]*\]|\[chorus[^\]]*\]|\[bridge[^\]]*\]|\[outro[^\]]*\]|bpm|key of|tempo|acoustic|guitar|piano|lo-fi|vinyl|reverb|vocals|suno|udio|giai điệu|tiết tấu|hòa âm)/i.test(userLower);
   } else {
-    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|sample:|chẳng hạn|empirical data|metrics|cagr|swot|dữ liệu thực tế|chỉ số đo lường)/i.test(lower);
+    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|sample:|chẳng hạn|empirical data|metrics|cagr|swot|dữ liệu thực tế|chỉ số đo lường)/i.test(userLower);
   }
 
-  // Kiểm tra Few-shot example chung
-  const hasExamples = /(ví dụ|example|few-shot|mẫu input|mẫu output|sample input|sample output|e\.g\.|for instance)/i.test(lower);
+  // Kiểm tra Few-shot example chung trong nội dung người dùng
+  const hasExamples = /(ví dụ|example|few-shot|mẫu input|mẫu output|sample input|sample output|e\.g\.|for instance)/i.test(userLower);
 
   if (domainSpecsBonus || hasExamples) {
     specsScore = 15;
@@ -435,7 +473,7 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
   const tier = calculateTier(total);
 
   // Sinh bản Prompt nâng cấp cơ bản (Local template)
-  const improved = generateLocalImprovedPrompt(p, domain);
+  const improved = generateLocalImprovedPrompt(userContent || p, domain);
 
   return {
     total_score: total,
