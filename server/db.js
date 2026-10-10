@@ -109,8 +109,11 @@ export function savePrompt(prompt) {
 }
 
 export function deletePrompt(id) {
-  db.prepare('DELETE FROM prompt_versions WHERE prompt_id = ?').run(id);
-  const result = db.prepare('DELETE FROM prompts WHERE id = ?').run(id);
+  const deleteTx = db.transaction((promptId) => {
+    db.prepare('DELETE FROM prompt_versions WHERE prompt_id = ?').run(promptId);
+    return db.prepare('DELETE FROM prompts WHERE id = ?').run(promptId);
+  });
+  const result = deleteTx(id);
   autoBackupSnapshot();
   return { success: result.changes > 0, id };
 }
@@ -207,19 +210,24 @@ let backupThrottleTimer = null;
 
 function pruneOldBackups(keepCount = MAX_BACKUP_SNAPSHOTS) {
   try {
-    const files = fs.readdirSync(BACKUPS_DIR)
-      .filter((file) => file.startsWith('lprompt_snapshot_') && file.endsWith('.json'))
-      .map((file) => {
-        const fullPath = path.join(BACKUPS_DIR, file);
-        return { file, fullPath, mtime: fs.statSync(fullPath).mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
+    const prunePrefix = (prefix, maxKeep) => {
+      const files = fs.readdirSync(BACKUPS_DIR)
+        .filter((file) => file.startsWith(prefix) && file.endsWith('.json'))
+        .map((file) => {
+          const fullPath = path.join(BACKUPS_DIR, file);
+          return { file, fullPath, mtime: fs.statSync(fullPath).mtimeMs };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
 
-    if (files.length > keepCount) {
-      for (const item of files.slice(keepCount)) {
-        try { fs.unlinkSync(item.fullPath); } catch {}
+      if (files.length > maxKeep) {
+        for (const item of files.slice(maxKeep)) {
+          try { fs.unlinkSync(item.fullPath); } catch {}
+        }
       }
-    }
+    };
+
+    prunePrefix('lprompt_snapshot_', keepCount);
+    prunePrefix('lprompt_full_backup_', 20);
   } catch (error) {
     console.warn('[LPrompt DB] Prune backups warning:', error instanceof Error ? error.message : error);
   }
@@ -261,6 +269,7 @@ export function exportFullBackup() {
   const filename = `lprompt_full_backup_${Date.now()}.json`;
   const fullPath = path.join(BACKUPS_DIR, filename);
   writeJsonAtomic(fullPath, data);
+  pruneOldBackups();
   return { success: true, filename, path: fullPath, data };
 }
 

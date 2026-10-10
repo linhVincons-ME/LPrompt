@@ -89,6 +89,7 @@ if ($xml -match '\{\{[^}]+\}\}') { throw 'The service config still contains an u
 $readTargets = @(
   $script:LPromptRoot,
   (Join-Path $script:LPromptRoot 'server'),
+  (Join-Path $script:LPromptRoot 'src'),
   (Join-Path $script:LPromptRoot 'dist'),
   (Join-Path $script:LPromptRoot 'node_modules'),
   $script:LPromptRuntime

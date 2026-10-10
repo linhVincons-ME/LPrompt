@@ -1,19 +1,4 @@
-type TransientFailure = {
-  kind: 'overloaded' | 'rate_limited' | 'temporarily_unavailable';
-  message: string;
-};
-
-function classifyTransientFailure(text: string): TransientFailure | null {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (!normalized) return null;
-  const patterns: Array<{ kind: TransientFailure['kind']; pattern: RegExp }> = [
-    { kind: 'overloaded', pattern: /high demand|spikes? in demand|(?:hệ thống|máy chủ|gemini).{0,20}quá tải|lưu lượng (?:truy cập )?(?:đang )?cao/i },
-    { kind: 'rate_limited', pattern: /too many requests|rate limit|resource exhausted|\b429\b|quá nhiều yêu cầu|vượt quá giới hạn (?:tốc độ|yêu cầu)/i },
-    { kind: 'temporarily_unavailable', pattern: /temporarily unavailable|service unavailable|try again later|please try again|(?:dịch vụ )?tạm thời không khả dụng|vui lòng thử lại sau/i }
-  ];
-  const match = patterns.find((candidate) => candidate.pattern.test(normalized));
-  return match ? { kind: match.kind, message: normalized.slice(0, 500) } : null;
-}
+import { classifyTransientFailure, type TransientFailure } from './availability';
 
 type LPromptMessage =
   | { type: 'LPROMPT_INSERT'; prompt: string; attachments?: Array<{ name: string; type: string; dataUrl: string }> }

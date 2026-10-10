@@ -260,6 +260,7 @@ export function App() {
     const parent = getBranchHead(versions, activeBranch);
     const contentHash = stableContentHash(promptContent);
     const versionNum = `${activeBranch}@${contentHash}`;
+    const matchingPrompt = savedPrompts.find((sp) => sp.original_prompt === promptContent || sp.improved_prompt === promptContent);
     const newVer: PromptVersion = {
       id: `ver-${crypto.randomUUID()}`,
       versionNumber: versionNum,
@@ -271,7 +272,8 @@ export function App() {
       branchName: activeBranch,
       parentId: parent?.id,
       mergeParentId: mergeParentId ?? pendingMergeParentId,
-      contentHash
+      contentHash,
+      promptId: matchingPrompt?.id
     };
     const updated = [newVer, ...versions];
     handleSaveVersions(updated);
@@ -807,6 +809,15 @@ export function App() {
           const filtered = savedPrompts.filter((x) => x.id !== id);
           setSavedPrompts(filtered);
           safeStorageSet('lprompt_saved_prompts', filtered);
+
+          const orphanedVersions = versions.filter((v) => v.promptId === id);
+          if (orphanedVersions.length > 0) {
+            orphanedVersions.forEach((v) => queueDeletion('versions', v.id));
+            const remainingVersions = versions.filter((v) => v.promptId !== id);
+            setVersions(remainingVersions);
+            safeStorageSet('lprompt_versions', remainingVersions);
+          }
+
           void deleteServerPrompt(id).then((deleted) => {
             if (!deleted) setAuditError('Đã xóa cục bộ; thao tác xóa SQLite đang chờ đồng bộ lại.');
           });

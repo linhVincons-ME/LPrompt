@@ -36,8 +36,9 @@ describe('extension safety contract', () => {
   });
 
   it('keeps the content script self-contained for classic MV3 injection', () => {
-    expect(contentScript).not.toMatch(/^import\s/m);
     expect(contentScript).toContain('classifyTransientFailure');
+    const builtChromeContentScript = readFileSync(new URL('../extension-dist/contentScript.js', import.meta.url), 'utf8');
+    expect(builtChromeContentScript).not.toMatch(/^import\s/m);
   });
 
   it('imports only explicit user selection through the context menu', () => {

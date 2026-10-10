@@ -112,14 +112,16 @@ export function inspectConstructionAdditionalRequirements(
 
     let currentFragment = fragment;
 
+    const END = '(?![\\p{L}\\p{N}])';
+
     if (options.outputType === 'image') {
-      const mediaTerms = '(?:âm thanh|nhạc nền|giọng đọc|thu âm|thời lượng|\\d+\\s*giây)';
+      const mediaTerms = `(?:âm thanh|nhạc nền|giọng đọc|thu âm|thời lượng|\\d+\\s*giây)${END}`;
       const negatedMedia = new RegExp(
-        `(?:không|cấm|bỏ|tắt)\\s+(?:có\\s+|cần\\s+|dùng\\s+|kèm\\s+|chứa\\s+)?${mediaTerms}` +
+        `(?:không|cấm|bỏ|tắt|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|dùng\\s+|kèm\\s+|chứa\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${mediaTerms}` +
         `(?:\\s*(?:,|và|hoặc|hay)\\s*${mediaTerms})*`,
         'giu'
       );
-      const mediaPattern = new RegExp(`(?<![\\p{L}\\p{N}])${mediaTerms}(?![\\p{L}\\p{N}])`, 'iu');
+      const mediaPattern = new RegExp(`(?<![\\p{L}\\p{N}])${mediaTerms}`, 'iu');
       const withoutNegated = currentFragment.toLocaleLowerCase('vi').replace(negatedMedia, ' ');
       if (mediaPattern.test(withoutNegated)) {
         issues.push({ severity: 'error', code: 'image-media-conflict', message: 'Prompt ảnh không hỗ trợ thời lượng, âm thanh, giọng đọc hoặc nhạc nền.' });
@@ -139,9 +141,9 @@ export function inspectConstructionAdditionalRequirements(
       issues.push({ severity: 'error', code: 'text-overlay-conflict', message: 'Yêu cầu chèn chữ hoặc phụ đề mâu thuẫn với quy tắc bổ sung chữ ở hậu kỳ.' });
     }
 
-    const textTerms = '(?:phụ đề|watermark|text|chữ(?:\\s*trên\\s*(?:ảnh|video))?)';
+    const textTerms = `(?:phụ đề${END}|watermark${END}|text${END}|chữ(?:\\s*trên\\s*(?:ảnh|video))?${END}(?!\\s+ký${END}))`;
     const negatedTextPattern = new RegExp(
-      `(?:không|cấm|tuyệt đối không)\\s+(?:có\\s+|cần\\s+|chèn\\s+|thêm\\s+)?${textTerms}` +
+      `(?:không|cấm|tuyệt đối không)\\s+(?:được\\s+)?(?:có\\s+|cần\\s+|chèn\\s+|thêm\\s+|hiển thị\\s+)?(?:bất kỳ\\s+)?${textTerms}(?:\\s+nào)?` +
       `(?:\\s*(?:,|và|hoặc|hay)\\s*${textTerms})*`,
       'giu'
     );

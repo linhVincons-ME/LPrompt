@@ -84,7 +84,8 @@ const STORAGE_KEYS = {
   snapshots: 'lpromptSnapshots',
   lastResponse: 'lpromptLastResponse',
   availability: 'lpromptAvailability',
-  lastBridgeDraftId: 'lpromptLastBridgeDraftId'
+  lastBridgeDraftId: 'lpromptLastBridgeDraftId',
+  selectionImport: 'lpromptSelectionImport'
 } as const;
 
 const SAMPLE_CONSTRUCTION_CONTEXT = 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu.';
@@ -165,11 +166,14 @@ export function ExtensionPanel() {
   const [availability, setAvailability] = useState<AvailabilityState | null>(null);
   const [clock, setClock] = useState(() => Date.now());
   const lastBridgeDraftIdRef = useRef('');
+  const lastSelectionImportIdRef = useRef('');
+  const activeTabRef = useRef(activeTab);
   const storageReadyRef = useRef<Promise<void>>(Promise.resolve());
   const domainRef = useRef(domain);
   const additionalInstructionRef = useRef(additionalInstruction);
   const outputLanguageRef = useRef(outputLanguage);
 
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { domainRef.current = domain; }, [domain]);
   useEffect(() => { additionalInstructionRef.current = additionalInstruction; }, [additionalInstruction]);
   useEffect(() => { outputLanguageRef.current = outputLanguage; }, [outputLanguage]);
@@ -188,6 +192,24 @@ export function ExtensionPanel() {
   const [constructionCompiled, setConstructionCompiled] = useState<ConstructionPromptResult | null>(null);
   const [constructionCopied, setConstructionCopied] = useState(false);
 
+  const applySelection = useCallback((id: string, text: string) => {
+    if (!id || id === lastSelectionImportIdRef.current || !text) return;
+    lastSelectionImportIdRef.current = id;
+    if (activeTabRef.current === 'construction') {
+      setConstructionContext(text);
+      setConstructionCompiled(null);
+      void chrome.storage.local.get(STORAGE_KEYS.constructionDraft).then((stored) => {
+        const prev = (stored[STORAGE_KEYS.constructionDraft] as StoredConstructionDraft | undefined) ?? {};
+        return chrome.storage.local.set({ [STORAGE_KEYS.constructionDraft]: { ...prev, context: text } });
+      }).catch(() => undefined);
+      setStatus('Đã nhận bối cảnh thi công từ văn bản được bôi chọn.');
+    } else {
+      setSource(text);
+      setCompiled(null);
+      setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
+    }
+  }, []);
+
   useEffect(() => {
     storageReadyRef.current = chrome.storage.local.get([
       STORAGE_KEYS.draft,
@@ -196,7 +218,8 @@ export function ExtensionPanel() {
       STORAGE_KEYS.snapshots,
       STORAGE_KEYS.lastResponse,
       STORAGE_KEYS.availability,
-      STORAGE_KEYS.lastBridgeDraftId
+      STORAGE_KEYS.lastBridgeDraftId,
+      STORAGE_KEYS.selectionImport
     ]).then((stored) => {
       const savedBridgeDraftId = stored[STORAGE_KEYS.lastBridgeDraftId] as string | undefined;
       if (savedBridgeDraftId) {
@@ -228,8 +251,13 @@ export function ExtensionPanel() {
       setResponse((stored[STORAGE_KEYS.lastResponse] as string | undefined) ?? '');
       const savedAvailability = stored[STORAGE_KEYS.availability] as AvailabilityState | undefined;
       if (savedAvailability?.retryAt && savedAvailability?.failure) setAvailability(savedAvailability);
+
+      const selectionImport = stored[STORAGE_KEYS.selectionImport] as { id?: string; source?: string; at?: number } | undefined;
+      if (selectionImport?.id && selectionImport.source && selectionImport.at && (Date.now() - selectionImport.at < 15_000)) {
+        applySelection(selectionImport.id, selectionImport.source);
+      }
     }).catch(() => setStatus('Không đọc được dữ liệu cục bộ; bạn vẫn có thể tiếp tục soạn prompt.'));
-  }, []);
+  }, [applySelection]);
 
   const saveConstructionDraft = useCallback((patch: Partial<StoredConstructionDraft>) => {
     const nextDraft: StoredConstructionDraft = {
@@ -290,34 +318,16 @@ export function ExtensionPanel() {
 
   useEffect(() => {
     const messageListener = (message: unknown) => {
-      const payload = message as { type?: string; source?: string };
+      const payload = message as { type?: string; source?: string; importId?: string };
       if (payload.type !== 'LPROMPT_DRAFT_UPDATED' || !payload.source) return;
-      if (activeTab === 'construction') {
-        setConstructionContext(payload.source);
-        setConstructionCompiled(null);
-        saveConstructionDraft({ context: payload.source });
-        setStatus('Đã nhận bối cảnh thi công từ văn bản được bôi chọn.');
-      } else {
-        setSource(payload.source);
-        setCompiled(null);
-        setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
-      }
+      applySelection(payload.importId || `msg_${Date.now()}`, payload.source);
     };
 
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
-      if (areaName !== 'local' || !changes[STORAGE_KEYS.draft]?.newValue) return;
-      const newDraft = changes[STORAGE_KEYS.draft].newValue as StoredDraft;
-      if (typeof newDraft?.source === 'string' && newDraft.source) {
-        if (activeTab === 'construction') {
-          setConstructionContext(newDraft.source);
-          setConstructionCompiled(null);
-          saveConstructionDraft({ context: newDraft.source });
-          setStatus('Đã nhận bối cảnh thi công từ văn bản được bôi chọn.');
-        } else {
-          setSource(newDraft.source);
-          setCompiled(null);
-          setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
-        }
+      if (areaName !== 'local') return;
+      const next = changes[STORAGE_KEYS.selectionImport]?.newValue as { id?: string; source?: string } | undefined;
+      if (next?.id && next.source) {
+        applySelection(next.id, next.source);
       }
     };
 
@@ -327,7 +337,7 @@ export function ExtensionPanel() {
       chrome.runtime.onMessage.removeListener(messageListener);
       chrome.storage.onChanged.removeListener(storageListener);
     };
-  }, [activeTab, saveConstructionDraft]);
+  }, [applySelection]);
 
   useEffect(() => {
     let active = true;

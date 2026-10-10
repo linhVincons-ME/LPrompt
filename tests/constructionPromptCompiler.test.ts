@@ -237,5 +237,23 @@ describe('construction prompt compiler', () => {
       participantCount: 1
     });
     expect(audioError.issues.some((issue) => issue.code === 'image-media-conflict')).toBe(true);
+
+    // Chữ ký and textures must not be clipped by no-text rule
+    const signatureCheck = inspectConstructionAdditionalRequirements('Không có chữ ký trên biên bản nghiệm thu; không có textures nhòe', {
+      outputType: 'image',
+      aspectRatio: '16:9',
+      participantCount: 1
+    });
+    expect(signatureCheck.issues.some((issue) => issue.code === 'duplicate-no-text')).toBe(false);
+    expect(signatureCheck.normalized).toContain('Không có chữ ký trên biên bản nghiệm thu');
+    expect(signatureCheck.normalized).toContain('không có textures nhòe');
+
+    // Expanded negation verbs should be caught properly
+    const expandedCheck = inspectConstructionAdditionalRequirements('Không được chèn chữ lên ảnh; không hiển thị phụ đề; không có bất kỳ chữ nào', {
+      outputType: 'image',
+      aspectRatio: '16:9',
+      participantCount: 1
+    });
+    expect(expandedCheck.issues.filter((issue) => issue.code === 'duplicate-no-text')).toHaveLength(3);
   });
 });
