@@ -1,4 +1,5 @@
 import type { SavedPrompt, PromptVersion } from '../types';
+import { flushDeletions, queueDeletion, withoutPendingDeletions, type DeletionCollection } from './deletionOutbox';
 
 function getApiBase(): string {
   const configured = import.meta.env.VITE_LPROMPT_API_BASE?.trim();
@@ -7,6 +8,17 @@ function getApiBase(): string {
   return 'http://127.0.0.1:8484';
 }
 const API_BASE = getApiBase();
+
+async function removeServerRecord(collection: DeletionCollection, id: string): Promise<boolean> {
+  const response = await apiFetch(`/api/${collection}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return response.ok;
+}
+
+export async function retryPendingDeletions(): Promise<boolean> {
+  const results = await Promise.all(['prompts', 'versions'].map((collection) =>
+    flushDeletions(collection as DeletionCollection, (id) => removeServerRecord(collection as DeletionCollection, id))));
+  return results.every(Boolean);
+}
 
 async function apiFetch(path: string, init: RequestInit = {}, timeoutMs = 3000): Promise<Response> {
   const controller = new AbortController();
@@ -75,7 +87,7 @@ export async function fetchServerPrompts(): Promise<SavedPrompt[] | null> {
     const res = await apiFetch('/api/prompts');
     if (res.ok) {
       const json = await res.json();
-      return json.data || [];
+      return withoutPendingDeletions('prompts', Array.isArray(json.data) ? json.data : []);
     }
   } catch {
     // Offline
@@ -87,6 +99,7 @@ export async function fetchServerPrompts(): Promise<SavedPrompt[] | null> {
  * Save prompt to embedded SQLite service
  */
 export async function saveServerPrompt(prompt: SavedPrompt): Promise<boolean> {
+  if (withoutPendingDeletions('prompts', [prompt]).length === 0) return false;
   try {
     const res = await apiFetch('/api/prompts', {
       method: 'POST',
@@ -102,14 +115,8 @@ export async function saveServerPrompt(prompt: SavedPrompt): Promise<boolean> {
  * Delete prompt from embedded SQLite service
  */
 export async function deleteServerPrompt(id: string): Promise<boolean> {
-  try {
-    const res = await apiFetch(`/api/prompts/${encodeURIComponent(id)}`, {
-      method: 'DELETE'
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  if (!queueDeletion('prompts', id)) return false;
+  return flushDeletions('prompts', (pendingId) => removeServerRecord('prompts', pendingId));
 }
 
 /**
@@ -120,7 +127,7 @@ export async function fetchServerVersions(): Promise<PromptVersion[] | null> {
     const res = await apiFetch('/api/versions');
     if (res.ok) {
       const json = await res.json();
-      return Array.isArray(json.data) ? json.data.map((item: Record<string, unknown>) => normalizeVersion(item)) : [];
+      return withoutPendingDeletions('versions', Array.isArray(json.data) ? json.data.map((item: Record<string, unknown>) => normalizeVersion(item)) : []);
     }
   } catch {
     // Offline
@@ -132,6 +139,7 @@ export async function fetchServerVersions(): Promise<PromptVersion[] | null> {
  * Save version to embedded SQLite service
  */
 export async function saveServerVersion(version: PromptVersion): Promise<boolean> {
+  if (withoutPendingDeletions('versions', [version]).length === 0) return false;
   try {
     const res = await apiFetch('/api/versions', {
       method: 'POST',
@@ -148,23 +156,32 @@ export async function saveServerVersion(version: PromptVersion): Promise<boolean
  * Delete version from embedded SQLite service
  */
 export async function deleteServerVersion(id: string): Promise<boolean> {
-  try {
-    const res = await apiFetch(`/api/versions/${encodeURIComponent(id)}`, {
-      method: 'DELETE'
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  if (!queueDeletion('versions', id)) return false;
+  return flushDeletions('versions', (pendingId) => removeServerRecord('versions', pendingId));
 }
 
-export async function sendDraftToExtension(source: string): Promise<boolean> {
-  if (!source.trim()) return false;
+export interface ExtensionDraftPayload {
+  source: string;
+  domain?: string;
+  additionalInstruction?: string;
+  outputLanguage?: string;
+}
+
+export async function sendDraftToExtension(
+  sourceOrPayload: string | ExtensionDraftPayload,
+  optionalDomain?: string
+): Promise<boolean> {
+  const payload: ExtensionDraftPayload =
+    typeof sourceOrPayload === 'string'
+      ? { source: sourceOrPayload, domain: optionalDomain }
+      : sourceOrPayload;
+
+  if (!payload.source?.trim()) return false;
   try {
     const res = await apiFetch('/api/extension/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source })
+      body: JSON.stringify(payload)
     });
     return res.ok;
   } catch {

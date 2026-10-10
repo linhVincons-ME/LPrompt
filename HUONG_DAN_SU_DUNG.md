@@ -4,7 +4,7 @@ Tài liệu này phản ánh working tree hiện tại: LPrompt hoạt động t
 
 ## 1. Cài extension (Chrome & Firefox)
 
-Yêu cầu Node.js 24 trở lên, Chrome 114 trở lên hoặc Firefox 115+ (khuyên dùng Firefox 142+).
+Yêu cầu Node.js 24 trở lên, Chrome 114 trở lên hoặc Firefox 142+.
 
 ```powershell
 cd D:\DevV2\LPrompt
@@ -59,9 +59,9 @@ Chạy script chuẩn bị cài đặt:
 4. Nhập **Lời thoại nhân vật** (nếu có): Compiler sẽ phân tích và chuyển thành hành động, tư thế chỉ trỏ/hướng dẫn tự nhiên của KTHT thay vì in chữ thô lên ảnh/video.
 5. Thiết lập tỷ lệ khung hình (`9:16`, `16:9`, `1:1`), thời lượng phân cảnh/video (3-30s), ảnh tham chiếu PPE (mũ, áo, tem chức danh), và yêu cầu bổ sung.
 6. Bấm **Biên dịch prompt thi công**:
-   - Compiler tự động xuất prompt chuẩn hóa theo đúng 7 phần nghiệp vụ chuyên biệt:
+   - Compiler video xuất 7 phần nghiệp vụ; compiler ảnh xuất 6 phần (không có âm thanh, thời lượng):
      1. **`[ĐẦU RA VÀ THỜI LƯỢNG]`**: Tỷ lệ khung hình, phong cách tài liệu hiện trường, thời lượng phân cảnh (3-30s).
-     2. **`[VAI TRÒ TỪNG ẢNH]`**: Xác định vai trò của ảnh trong chuỗi nghiệp vụ (hướng dẫn kỹ thuật, đối chiếu hồ sơ, nghiệm thu hoặc tổng kết bàn giao).
+     2. **`[MỤC TIÊU CẢNH VIDEO]`**: Xác định mục tiêu giới thiệu, kiểm tra hoặc tổng kết của một cảnh liên tục. Video mô phỏng không phải bằng chứng nghiệm thu. Với ảnh tĩnh, mục này vẫn là **`[VAI TRÒ TỪNG ẢNH]`**.
      3. **`[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]`**: Khóa nhận diện duy nhất một kỹ sư KTHT người Việt Nam, chuẩn mực trang phục PPE (mũ bảo hộ trắng, tem chức danh, áo phản quang, giày an toàn), quy tắc nhận diện thương hiệu.
      4. **`[BỐI CẢNH, VỊ TRÍ VẬT THỂ]`**: Chi tiết bối cảnh hiện trường, bố trí vật thể ở tiền cảnh/hậu cảnh, quy chuẩn công trường 5S, an toàn lối đi.
      5. **`[HÀNH ĐỘNG VÀ CAMERA]`**: Cử chỉ thuyết trình/kiểm tra tự nhiên theo lời thoại, bố cục trung toàn cảnh ngang tầm mắt (Medium-Wide Shot, Eye-level), tiêu cự 35-50mm.
@@ -75,7 +75,7 @@ Bạn cũng có thể bôi chọn văn bản trên website bất kỳ, bấm chu
 
 ## 3. Khi Gemini báo quá tải
 
-Extension nhận diện các thông báo như `high demand`, `try again later`, `temporarily unavailable`, `too many requests`, `rate limit` và `429`.
+Extension nhận diện các thông báo như `high demand`, `try again later`, `temporarily unavailable`, `too many requests`, `rate limit`, `429` và `hệ thống quá tải` từ các container cảnh báo hệ thống (`role="alert"`, banner lỗi, snackbar). Hệ thống không quét vào nội dung câu trả lời để tránh nhận nhầm các thuật ngữ kỹ thuật (như "dây cáp quá tải", "máy biến áp quá tải").
 
 Khi phát hiện:
 
@@ -99,7 +99,7 @@ Web app có compiler, thẩm định heuristic, xem trước cục bộ, templat
 
 **Xem trước prompt cục bộ** chỉ kiểm tra độ dài, biến template, output contract, guardrail, điểm mơ hồ và xung đột. Số token hiển thị là ước lượng, không phải tokenizer của Gemini. Để nhận phản hồi AI thật, dùng extension và Gemini Web.
 
-Nút **Chuyển sang extension** dùng service làm cầu nối bộ nhớ tạm trong tối đa 10 phút. Dữ liệu trung chuyển không được ghi vào SQLite. Nếu service tắt hoặc request timeout, nội dung trong web app vẫn được giữ nguyên.
+Nút **Chuyển sang extension** dùng service làm cầu nối bộ nhớ tạm trong tối đa 10 phút. Dữ liệu trung chuyển không được ghi vào SQLite, và extension ghi nhớ ID của draft đã nạp vào `chrome.storage.local` để không ghi đè bản nháp khi người dùng mở lại side panel. Nếu service tắt hoặc request timeout, nội dung trong web app vẫn được giữ nguyên.
 
 ## 5. Windows Service
 
@@ -115,13 +115,14 @@ Service bind mặc định tại `127.0.0.1:8484`, cung cấp web app, SQLite, R
 
 ## 6. Các chức năng local
 
-- **Thẩm định 100đ:** heuristic theo role/context, task clarity, constraints, output format và examples/specs.
+- **Thẩm định 100đ:** Heuristic song ngữ (Việt - Anh) theo 5 tiêu chí: role/context, task clarity, constraints, output format và examples/specs. Nhận diện mở rộng các vai trò kỹ thuật, động từ hành động, rào chắn chống ảo giác (zero hallucination, không bịa đặt số liệu) và sinh bản mẫu prompt cải tiến chuẩn tiếng Việt tương ứng theo từng domain.
 - **LPrompt Compiler:** một bộ biên dịch chuẩn duy nhất, tập trung vào đầu vào, ràng buộc, định dạng kết quả và chống bịa dữ liệu.
 - **Prompt thi công:** tải ảnh tham chiếu thật, chọn cấu hình KTHT/TDTD/CND được phê duyệt, tự loại yêu cầu bổ sung trùng và chặn yêu cầu mâu thuẫn trước khi biên dịch.
 - **Few-Shot:** tạo mẫu heuristic theo domain và cho phép sửa thủ công.
-- **Template Test:** điền biến và chạy assertion `contains`, `not_contains`, `regex`, `min_length` trên template cục bộ; không gọi AI.
-- **Kiểm tra mơ hồ/xung đột:** phát hiện giới hạn độ dài, ngôn ngữ, định dạng mâu thuẫn và các tiêu chí khó đo lường.
-- **Security:** quét tĩnh mức độ bao phủ guardrail thuộc 10 nhóm OWASP LLM và sinh patch; không tuyên bố là dynamic red-team.
+- **Template Test:** điền biến và chạy assertion `contains`, `not_contains` (kiểm tra triệt để không còn sót cú pháp `{{`), `regex`, `min_length` trên template cục bộ; không gọi AI.
+- **Kiểm tra mơ hồ/xung đột (Inspector):** phát hiện giới hạn độ dài, ngôn ngữ, định dạng mâu thuẫn (bao gồm xung đột giữa strict JSON và giải thích văn bản dài), nhận diện thẻ ngữ cảnh tiếng Việt (`<yeu_cau_nguoi_dung>`, `[bối cảnh]`) để tránh cảnh báo sai về đại từ, và chỉ ra các tiêu chí khó đo lường.
+- **Security Scanner:** quét tĩnh mức độ bao phủ guardrail thuộc 10 nhóm OWASP LLM, tự động patch guardrail song ngữ tiếng Việt hoặc tiếng Anh phù hợp với ngôn ngữ prompt; nhận diện thẻ cô lập dữ liệu người dùng; không tuyên bố là dynamic red-team.
+- **Cầu nối Web App → Extension:** Chuyển nhanh draft từ modal xem trước sang extension kèm theo thông tin Domain, tự động đồng bộ trạng thái khi extension mở trên Gemini Web.
 - **Xuất Prompt:** Markdown, plain text hoặc JSON; không sinh SDK/cURL/API endpoint.
 - **Versioning:** branch, commit, merge, diff và rollback.
 - Có 9 Fabric-style presets trong working tree hiện tại.

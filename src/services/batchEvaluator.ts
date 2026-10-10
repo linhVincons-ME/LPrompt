@@ -49,7 +49,7 @@ export function generateStarterTestCases(variables: string[]): TestCase[] {
       name: `Bộ kiểm thử số ${num} (${Object.keys(vars).slice(0, 2).join(', ')})`,
       variables: vars,
       assertionType: num === 1 ? 'min_length' : num === 2 ? 'not_contains' : 'contains',
-      expectedValue: num === 1 ? '100' : num === 2 ? 'lỗi' : Object.values(vars)[0] || '1'
+      expectedValue: num === 1 ? '100' : num === 2 ? '{{' : Object.values(vars)[0] || '1'
     };
   });
 }

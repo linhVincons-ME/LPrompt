@@ -46,7 +46,8 @@ export function inspectPromptLocally(prompt: string): PromptIssue[] {
   const conflictRules: Array<[string, string, RegExp, RegExp, string]> = [
     ['detail-vs-brief', 'Mức độ chi tiết mâu thuẫn', /(?:thật chi tiết|đầy đủ mọi chi tiết|very detailed|exhaustive)/i, /(?:thật ngắn gọn|cực kỳ ngắn|one sentence only|very concise)/i, 'Chọn ưu tiên chi tiết hoặc đặt giới hạn độ dài cụ thể.'],
     ['language-conflict', 'Ngôn ngữ đầu ra mâu thuẫn', /(?:trả lời|viết|output|respond|write).{0,30}(?:tiếng Việt|Vietnamese)/i, /(?:trả lời|viết|output|respond|write).{0,30}(?:tiếng Anh|English)/i, 'Chỉ định một ngôn ngữ đầu ra hoặc mô tả rõ phần nào dùng từng ngôn ngữ.'],
-    ['format-conflict', 'Định dạng đầu ra mâu thuẫn', /(?:chỉ|only).{0,20}(?:JSON)/i, /(?:chỉ|only).{0,20}(?:Markdown)/i, 'Chọn một định dạng duy nhất hoặc mô tả cấu trúc kết hợp hợp lệ.']
+    ['format-conflict', 'Định dạng đầu ra mâu thuẫn', /(?:chỉ|only).{0,20}(?:JSON)/i, /(?:chỉ|only).{0,20}(?:Markdown)/i, 'Chọn một định dạng duy nhất hoặc mô tả cấu trúc kết hợp hợp lệ.'],
+    ['json-vs-explanation', 'Định dạng JSON xung đột với giải thích dài', /(?:chỉ trả về JSON|valid JSON only|strictly JSON|raw JSON)/i, /(?:giải thích chi tiết|kèm bài phân tích|detailed step-by-step reasoning|giải thích từng bước)/i, 'Nếu cần JSON hợp lệ, hãy yêu cầu đưa phần giải thích vào một trường cụ thể trong JSON (như "reasoning") thay vì viết văn bản tự do ngoài cấu trúc.']
   ];
   for (const [id, title, first, second, suggestion] of conflictRules) {
     if (has(text, first) && has(text, second)) {
@@ -63,7 +64,7 @@ export function inspectPromptLocally(prompt: string): PromptIssue[] {
     });
   }
 
-  if (has(text, /\b(nó|họ|cái này|việc đó|it|this thing|they)\b/i) && !has(text, /(?:<user_input>|\[context\]|bối cảnh|context)/i)) {
+  if (has(text, /(?<![\p{L}\p{N}])(?:nó|họ|cái này|việc đó|it|this thing|they)(?![\p{L}\p{N}])/iu) && !has(text, /(?:<user_input>|<yeu_cau_nguoi_dung>|<du_lieu_dau_vao>|\[context\]|\[bối cảnh\]|\[yêu cầu\]|bối cảnh|context)/i)) {
     issues.push({
       id: 'unclear-reference', severity: 'warning', title: 'Tham chiếu có thể chưa rõ',
       description: 'Prompt dùng đại từ hoặc tham chiếu nhưng chưa chỉ rõ đối tượng trong phần bối cảnh.',

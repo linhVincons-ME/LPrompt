@@ -7,11 +7,11 @@ import { FABRIC_PRESETS } from './presetsData.js';
 export function evaluatePromptLocally(prompt) {
   const text = String(prompt || '');
   const signals = [
-    /\b(you are|act as|bạn là|vai trò)\b/i,
-    /\b(task|nhiệm vụ|mục tiêu|hãy)\b/i,
-    /\b(constraint|must|must not|không được|ràng buộc)\b/i,
-    /\b(json|markdown|output|định dạng|schema)\b/i,
-    /\b(example|ví dụ|context|ngữ cảnh|input)\b/i
+    /(?<![\p{L}\p{N}])(?:you are|act as|bạn là|vai trò)(?![\p{L}\p{N}])/iu,
+    /(?<![\p{L}\p{N}])(?:task|nhiệm vụ|mục tiêu|hãy)(?![\p{L}\p{N}])/iu,
+    /(?<![\p{L}\p{N}])(?:constraint|must|must not|không được|ràng buộc)(?![\p{L}\p{N}])/iu,
+    /(?<![\p{L}\p{N}])(?:json|markdown|output|định dạng|schema)(?![\p{L}\p{N}])/iu,
+    /(?<![\p{L}\p{N}])(?:example|ví dụ|context|ngữ cảnh|input)(?![\p{L}\p{N}])/iu
   ];
   const score = Math.min(100, 25 + signals.filter((signal) => signal.test(text)).length * 15);
   return { score, tier: score >= 90 ? 'Xuất sắc (Production)' : score >= 75 ? 'Khá' : 'Cần tối ưu', evaluatedPromptLength: text.length, method: 'deterministic-local-heuristic' };

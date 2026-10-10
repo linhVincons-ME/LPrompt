@@ -90,9 +90,13 @@ export function ConstructionPromptView({ onUsePrompt, onOpenPlayground }: Constr
 
   const copy = async () => {
     if (!compiledPrompt) return;
-    await navigator.clipboard.writeText(compiledPrompt);
-    setCopied(true);
-    globalThis.setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(compiledPrompt);
+      setCopied(true);
+      globalThis.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Không thể truy cập clipboard; hãy chọn và sao chép thủ công.');
+    }
   };
 
   const reset = () => {

@@ -37,15 +37,24 @@ describe('local service and MCP integration', () => {
 
   it('bridges an ephemeral draft to extension origins only', async () => {
     const base = `http://127.0.0.1:${service.port}`;
-    const saved = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ source: 'Prompt chuyển sang extension' }) });
+    const saved = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ source: 'Prompt chuyển sang extension', domain: 'code' }) });
     expect(saved.status).toBe(202);
     const extensionOrigin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
     const received = await fetch(`${base}/api/extension/draft`, { headers: { Origin: extensionOrigin } });
     expect(received.status).toBe(200);
     expect(received.headers.get('access-control-allow-origin')).toBe(extensionOrigin);
-    expect((await received.json()).data.source).toBe('Prompt chuyển sang extension');
+    const receivedData = (await received.json()).data;
+    expect(receivedData.source).toBe('Prompt chuyển sang extension');
+    expect(receivedData.domain).toBe('code');
     const blockedWrite = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: extensionOrigin }, body: JSON.stringify({ source: 'blocked' }) });
     expect(blockedWrite.status).toBe(403);
+    const firefoxOrigin = 'moz-extension://12345678-1234-1234-1234-123456789abc';
+    const firefoxRead = await fetch(`${base}/api/extension/draft`, { headers: { Origin: firefoxOrigin } });
+    expect(firefoxRead.status).toBe(200);
+    expect(firefoxRead.headers.get('access-control-allow-origin')).toBe(firefoxOrigin);
+    const firefoxWrite = await fetch(`${base}/api/extension/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: firefoxOrigin }, body: JSON.stringify({ source: 'blocked' }) });
+    expect(firefoxWrite.status).toBe(403);
+    expect((await fetch(`${base}/api/prompts`, { headers: { Origin: firefoxOrigin } })).status).toBe(403);
   });
 
   it('refuses remote binding without explicit auth and allowlists', () => {
@@ -68,8 +77,11 @@ describe('local service and MCP integration', () => {
     await client.connect(transport);
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name)).toContain('lprompt_commit_version');
-    const called = await client.callTool({ name: 'lprompt_evaluate', arguments: { prompt: 'You are an expert. Task: output JSON.' } });
+    const called = await client.callTool({ name: 'lprompt_evaluate', arguments: { prompt: 'Bạn là chuyên gia. Nhiệm vụ: hãy viết định dạng JSON. Ràng buộc: không được bịa. Ví dụ: mẫu dữ liệu.' } });
     expect(called.content[0].text).toContain('deterministic-local-heuristic');
+    const parsed = JSON.parse(called.content[0].text);
+    expect(parsed.score).toBe(100);
+    expect(parsed.tier).toContain('Xuất sắc');
     await client.close();
   });
 });

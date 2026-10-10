@@ -92,7 +92,6 @@ export function inspectConstructionAdditionalRequirements(
   const fragments = source.split(/\s*(?:[;\n]+|(?<=[.!?])\s+)\s*/).filter(Boolean);
 
   for (const fragment of fragments) {
-    const lower = fragment.toLocaleLowerCase('vi');
     const ratio = fragment.match(/\b(9\s*:\s*16|16\s*:\s*9|1\s*:\s*1)\b/)?.[1]?.replace(/\s/g, '');
     const count = fragment.match(/\b([1-9])\s*(?:người|nhân vật|thành viên)\b/i)?.[1];
 
@@ -111,29 +110,59 @@ export function inspectConstructionAdditionalRequirements(
       if (requestedCount === participantCount) continue;
     }
 
-    if (options.outputType === 'image' && /\b(?:âm thanh|nhạc nền|giọng đọc|thu âm|\d+\s*giây|thời lượng)\b/i.test(lower)) {
-      issues.push({ severity: 'error', code: 'image-media-conflict', message: 'Prompt ảnh không hỗ trợ thời lượng, âm thanh, giọng đọc hoặc nhạc nền.' });
+    let currentFragment = fragment;
+
+    if (options.outputType === 'image') {
+      const mediaTerms = '(?:âm thanh|nhạc nền|giọng đọc|thu âm|thời lượng|\\d+\\s*giây)';
+      const negatedMedia = new RegExp(
+        `(?:không|cấm|bỏ|tắt)\\s+(?:có\\s+|cần\\s+|dùng\\s+|kèm\\s+|chứa\\s+)?${mediaTerms}` +
+        `(?:\\s*(?:,|và|hoặc|hay)\\s*${mediaTerms})*`,
+        'giu'
+      );
+      const mediaPattern = new RegExp(`(?<![\\p{L}\\p{N}])${mediaTerms}(?![\\p{L}\\p{N}])`, 'iu');
+      const withoutNegated = currentFragment.toLocaleLowerCase('vi').replace(negatedMedia, ' ');
+      if (mediaPattern.test(withoutNegated)) {
+        issues.push({ severity: 'error', code: 'image-media-conflict', message: 'Prompt ảnh không hỗ trợ thời lượng, âm thanh, giọng đọc hoặc nhạc nền.' });
+      } else if (withoutNegated !== currentFragment.toLocaleLowerCase('vi')) {
+        issues.push({ severity: 'warning', code: 'duplicate-no-media', message: 'Prompt ảnh vốn không có âm thanh hoặc thời lượng nên đã loại khỏi yêu cầu bổ sung.' });
+        currentFragment = currentFragment
+          .replace(negatedMedia, ' ')
+          .replace(/^[\s,;.:-]+|[\s,;.:-]+$/g, '')
+          .replace(/\s{2,}/g, ' ');
+        if (!/\p{L}{2,}/u.test(currentFragment)) continue;
+      }
     }
 
-    if (/(?:chèn|hiển thị|thêm|tạo|có).{0,24}(?:phụ đề|watermark|text|chữ trên ảnh|chữ trên video)/i.test(lower)
-      && !/(?:không|cấm|tuyệt đối không)/i.test(lower)) {
+    const lowerCurrent = currentFragment.toLocaleLowerCase('vi');
+    if (/(?:chèn|hiển thị|thêm|tạo|có).{0,24}(?:phụ đề|watermark|text|chữ trên ảnh|chữ trên video)/i.test(lowerCurrent)
+      && !/(?:không|cấm|tuyệt đối không)/i.test(lowerCurrent)) {
       issues.push({ severity: 'error', code: 'text-overlay-conflict', message: 'Yêu cầu chèn chữ hoặc phụ đề mâu thuẫn với quy tắc bổ sung chữ ở hậu kỳ.' });
     }
 
-    if (/(?:không|cấm|tuyệt đối không).{0,40}(?:phụ đề|watermark|text|chữ)/i.test(lower)) {
+    const textTerms = '(?:phụ đề|watermark|text|chữ(?:\\s*trên\\s*(?:ảnh|video))?)';
+    const negatedTextPattern = new RegExp(
+      `(?:không|cấm|tuyệt đối không)\\s+(?:có\\s+|cần\\s+|chèn\\s+|thêm\\s+)?${textTerms}` +
+      `(?:\\s*(?:,|và|hoặc|hay)\\s*${textTerms})*`,
+      'giu'
+    );
+    if (negatedTextPattern.test(lowerCurrent)) {
       issues.push({ severity: 'warning', code: 'duplicate-no-text', message: 'Quy tắc không chèn chữ đã có sẵn nên đã loại khỏi yêu cầu bổ sung.' });
-      continue;
+      currentFragment = currentFragment
+        .replace(negatedTextPattern, ' ')
+        .replace(/^[\s,;.:-]+|[\s,;.:-]+$/g, '')
+        .replace(/\s{2,}/g, ' ');
+      if (!/\p{L}{2,}/u.test(currentFragment)) continue;
     }
-    if (/(?:đầy đủ|tuân thủ).{0,20}\bPPE\b/i.test(fragment)) {
+    if (/(?:đầy đủ|tuân thủ).{0,20}\bPPE\b/i.test(currentFragment)) {
       issues.push({ severity: 'warning', code: 'duplicate-ppe', message: 'Quy tắc PPE đã có sẵn nên đã loại khỏi yêu cầu bổ sung.' });
       continue;
     }
-    if (/(?:không thêm|duy nhất).{0,30}(?:người|nhân vật)/i.test(lower)) {
+    if (/(?:không thêm|duy nhất).{0,30}(?:người|nhân vật)/i.test(currentFragment.toLocaleLowerCase('vi'))) {
       issues.push({ severity: 'warning', code: 'duplicate-people-rule', message: 'Quy tắc số người đã có sẵn nên đã loại khỏi yêu cầu bổ sung.' });
       continue;
     }
 
-    kept.push(fragment.replace(/[.;]+$/, '').trim());
+    kept.push(currentFragment.replace(/[.;]+$/, '').trim());
   }
 
   return { normalized: kept.join('; '), issues };
@@ -281,16 +310,20 @@ function compileVideo(input: ConstructionPromptInput): string {
   const additional = inspectConstructionAdditionalRequirements(input.additionalRequirements, input).normalized;
   const duration = Math.min(30, Math.max(3, input.durationSeconds ?? 8));
   const action = inferAction(dialogue, crew.leadRole);
-  const role = inferImageRole(dialogue, context);
+  const purpose = /kết luận|hoàn thành|kết quả|bàn giao/i.test(dialogue)
+    ? 'Trình bày phần tổng kết hạng mục theo dữ kiện đã cung cấp; không hàm ý nghiệm thu đạt hoặc không đạt.'
+    : /kiểm tra|nghiệm thu|đo|đối chiếu|tiêu chuẩn/i.test(dialogue) && !/hướng dẫn|các bước|quy trình/i.test(dialogue)
+      ? 'Minh họa thao tác kiểm tra và đối chiếu hạng mục đã mô tả; không tự bổ sung bước kỹ thuật hoặc kết quả đo.'
+      : 'Giới thiệu hạng mục và nội dung hướng dẫn đã cung cấp, kết nối người nói với khu vực thi công.';
 
   return [
     `[ĐẦU RA VÀ THỜI LƯỢNG]`,
     `- Đầu ra: Video hướng dẫn kỹ thuật hiện trường, tỷ lệ ${aspectRatio}, phong cách tài liệu hiện trường chân thực, chuyển động tự nhiên liên tục.`,
     `- Thời lượng: ${duration} giây. Chuyển động máy quay chậm, ổn định, không giật lắc, không morphing giữa các khung hình.`,
     ``,
-    `[VAI TRÒ TỪNG ẢNH]`,
-    `- ${role}`,
-    `- Phân cảnh video ghi nhận liên tục quá trình hướng dẫn kỹ thuật hiện trường, kết nối người nói và không gian thi công.`,
+    `[MỤC TIÊU CẢNH VIDEO]`,
+    `- ${purpose}`,
+    `- Một cảnh liên tục trong thời lượng đã chọn; không tự chia thành nhiều phân cảnh hoặc thêm bước quy trình chưa được cung cấp. Video là mô phỏng minh họa, không phải bằng chứng nghiệm thu.`,
     ``,
     `[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]`,
     `- Khóa nhân vật: ${characterLock(crew, true)}`,
@@ -304,7 +337,7 @@ function compileVideo(input: ConstructionPromptInput): string {
     ``,
     `[HÀNH ĐỘNG VÀ CAMERA]`,
     `- Hành động nhân vật: ${action}`,
-    `- Chuyển động máy quay: Mở đầu bằng trung toàn cảnh ngang tầm mắt để thấy KTHT cùng khu vực thi công phía sau; chuyển động máy chậm, ổn định. Chỉ chuyển sang cận cảnh khi cần làm rõ thao tác hoặc chi tiết đã có trong mô tả; không dùng chuyển động FPV drone hay dolly kịch tính.`,
+    `- Chuyển động máy quay: Mở đầu bằng trung toàn cảnh ngang tầm mắt để thấy ${crew.leadRole} cùng khu vực thi công phía sau; chuyển động máy chậm, ổn định. Chỉ tiến nhẹ tới cận cảnh khi cần làm rõ thao tác hoặc chi tiết đã có trong mô tả, không cắt cảnh; không dùng chuyển động FPV drone hay dolly kịch tính.`,
     `- Ổn định hình ảnh: Cử động cơ thể, bàn tay, PPE và vật thể ổn định giữa các khung hình; đúng giải phẫu bàn tay 5 ngón, không biến dạng khuôn mặt.`,
     ``,
     `[ÂM THANH]`,

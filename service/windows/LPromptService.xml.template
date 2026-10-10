@@ -15,7 +15,6 @@
   <env name="LPROMPT_DB_FILE" value="{{DATA_DIR}}\lprompt.db" />
   <env name="LPROMPT_REQUEST_TIMEOUT_MS" value="30000" />
   <env name="LPROMPT_SHUTDOWN_TIMEOUT_MS" value="12000" />
-  {{PYTHON_ENV}}
   <stoptimeout>20 sec</stoptimeout>
   <hidewindow>true</hidewindow>
   <onfailure action="restart" delay="5 sec" />

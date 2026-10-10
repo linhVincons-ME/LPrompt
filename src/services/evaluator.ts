@@ -55,6 +55,12 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /vai trò/i,
     /nhập vai/i,
     /hãy là/i,
+    /kỹ sư/i,
+    /kiến trúc sư/i,
+    /lập trình viên/i,
+    /chuyên viên/i,
+    /nhà nghiên cứu/i,
+    /chỉ đạo nghệ thuật/i,
     // Tiếng Anh
     /you are/i,
     /act as/i,
@@ -68,7 +74,10 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /software engineer/i,
     /system architect/i,
     /research fellow/i,
-    /data scientist/i
+    /data scientist/i,
+    /art director/i,
+    /creative director/i,
+    /tech lead/i
   ];
 
   const contextPatterns = [
@@ -77,12 +86,14 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /\[objective[^\]]*\]/i,
     /\[mandate[^\]]*\]/i,
     /\[scenario[^\]]*\]/i,
+    /\[scope[^\]]*\]/i,
     /context\s*:/i,
     /background\s*:/i,
     /objective\s*:/i,
     /goal\s*:/i,
     /scenario\s*:/i,
     /target audience/i,
+    /use case\s*:/i,
     // Tiếng Việt
     /trong bối cảnh/i,
     /ngữ cảnh/i,
@@ -90,7 +101,11 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /dự án/i,
     /khách hàng/i,
     /đối tượng/i,
-    /tình huống/i
+    /tình huống/i,
+    /bối cảnh bài toán/i,
+    /yêu cầu bài toán/i,
+    /phạm vi/i,
+    /trường hợp sử dụng/i
   ];
 
   const hasRole = rolePatterns.some((rgx) => rgx.test(lower));
@@ -138,6 +153,14 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /chụp/i,
     /quay/i,
     /vẽ/i,
+    /biên soạn/i,
+    /lập trình/i,
+    /đánh giá/i,
+    /tổng hợp/i,
+    /đề xuất/i,
+    /kiểm tra/i,
+    /xác minh/i,
+    /chuẩn hóa/i,
     // Tiếng Anh
     /generate/i,
     /write/i,
@@ -222,6 +245,12 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
     /negative\s*prompt\s*:/i,
     // Tiếng Việt
     /không được/i,
+    /không (?:tự )?(?:bịa|suy diễn|tiết lộ|tạo nguồn|tạo số liệu|bịa đặt|chế biến)/i,
+    /chống ảo giác/i,
+    /zero hallucination/i,
+    /không bịa/i,
+    /không giả định/i,
+    /chỉ dùng thông tin đã cấp/i,
     /tránh/i,
     /cấm/i,
     /đừng/i,
@@ -374,15 +403,15 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
   let domainSpecsBonus = false;
 
   if (domain === 'image') {
-    domainSpecsBonus = /(shot on|hasselblad|canon|sony|nikon|lens|85mm|35mm|50mm|16mm|f\/1\.[0-9]|f\/2\.[0-9]|bokeh|depth of field|volumetric|golden hour|chiaroscuro|lighting|8k|4k|uhd|photorealistic|hyper-realistic|octane|unreal engine|--ar|--v|--style|aspect ratio|close-up|portrait)/i.test(lower);
+    domainSpecsBonus = /(shot on|hasselblad|canon|sony|nikon|lens|85mm|35mm|50mm|16mm|f\/1\.[0-9]|f\/2\.[0-9]|bokeh|depth of field|volumetric|golden hour|chiaroscuro|lighting|8k|4k|uhd|photorealistic|hyper-realistic|octane|unreal engine|--ar|--v|--style|aspect ratio|close-up|portrait|ống kính|tiêu cự|xóa phông|độ sâu trường ảnh|ánh sáng|độ phân giải cao|tỷ lệ|cận cảnh|toàn cảnh|chân dung)/i.test(lower);
   } else if (domain === 'video') {
-    domainSpecsBonus = /(camera movement|dolly|pan|tilt|zoom|fpv|drone|tracking shot|fps|24fps|60fps|motion speed|motion factor|cinematic|aspect ratio|2\.39:1|16:9|first frame|last frame|parallax|temporal)/i.test(lower);
+    domainSpecsBonus = /(camera movement|dolly|pan|tilt|zoom|fpv|drone|tracking shot|fps|24fps|60fps|motion speed|motion factor|cinematic|aspect ratio|2\.39:1|16:9|first frame|last frame|parallax|temporal|chuyển động camera|tốc độ chuyển động|điện ảnh|tỷ lệ khung hình|khung hình đầu)/i.test(lower);
   } else if (domain === 'code') {
-    domainSpecsBonus = /(typescript|python|golang|rust|c\+\+|java|react|fastapi|docker|clean architecture|solid|pydantic|pytest|jest|unit test|benchmark|async\/await|error handling|type hints|docstrings|ast)/i.test(lower);
+    domainSpecsBonus = /(typescript|python|golang|rust|c\+\+|java|react|fastapi|docker|clean architecture|solid|pydantic|pytest|jest|unit test|benchmark|async\/await|error handling|type hints|docstrings|ast|kiểm thử|xử lý lỗi|bắt ngoại lệ)/i.test(lower);
   } else if (domain === 'audio') {
-    domainSpecsBonus = /(\[intro[^\]]*\]|\[verse[^\]]*\]|\[chorus[^\]]*\]|\[bridge[^\]]*\]|\[outro[^\]]*\]|bpm|key of|tempo|acoustic|guitar|piano|lo-fi|vinyl|reverb|vocals|suno|udio)/i.test(lower);
+    domainSpecsBonus = /(\[intro[^\]]*\]|\[verse[^\]]*\]|\[chorus[^\]]*\]|\[bridge[^\]]*\]|\[outro[^\]]*\]|bpm|key of|tempo|acoustic|guitar|piano|lo-fi|vinyl|reverb|vocals|suno|udio|giai điệu|tiết tấu|hòa âm)/i.test(lower);
   } else {
-    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|sample:|chẳng hạn|empirical data|metrics|cagr|swot)/i.test(lower);
+    domainSpecsBonus = /(ví dụ|example|few-shot|mẫu|input:|output:|sample:|chẳng hạn|empirical data|metrics|cagr|swot|dữ liệu thực tế|chỉ số đo lường)/i.test(lower);
   }
 
   // Kiểm tra Few-shot example chung
@@ -430,6 +459,8 @@ export function evaluatePromptLocally(prompt: string, domain: PromptDomain): Pro
  */
 function generateLocalImprovedPrompt(original: string, domain: PromptDomain): string {
   const clean = original.trim();
+  const isVi = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(clean);
+
   switch (domain) {
     case 'image':
       return `[ROLE]: World-renowned commercial photographer and digital concept artist.
@@ -447,6 +478,24 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 [TECHNICAL SPECS]: 24fps, 4K resolution, cinematic aspect ratio 16:9, fluid continuous motion without morphing glitches.`;
 
     case 'code':
+      if (isVi) {
+        return `[VAI TRÒ]: Kỹ sư phần mềm Principal và Kiến trúc sư hệ thống.
+[NHIỆM VỤ]: Thiết kế và triển khai tính năng đạt tiêu chuẩn production:
+"${clean}"
+
+[YÊU CẦU & KIẾN TRÚC]:
+1. Viết code module hóa, rõ ràng, định kiểu tĩnh nghiêm ngặt và tuân thủ nguyên lý SOLID.
+2. Xử lý ngoại lệ đầy đủ, quản lý timeout và cơ chế suy giảm mềm (graceful degradation).
+3. Tối ưu độ phức tạp thời gian/không gian (O(N) hoặc tốt hơn ở luồng chính).
+
+[RÀNG BUỘC]:
+- Không dùng thư viện không an toàn hoặc đã ngừng hỗ trợ (deprecated).
+- Bao gồm các ca kiểm thử đơn vị (unit tests) cho ca biên (input rỗng, timeout, dữ liệu sai định dạng).
+
+[ĐỊNH DẠNG ĐẦU RA]:
+- Trình bày mã nguồn hoàn chỉnh trong khối code Markdown có chú thích docstring rõ ràng.
+- Kèm theo 3 gạch đầu dòng tóm lược quyết định kỹ thuật quan trọng.`;
+      }
       return `[ROLE]: Principal Software Engineer and System Architect.
 [TASK]: Implement the following feature with production-grade standards:
 "${clean}"
@@ -465,6 +514,14 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 - Add a brief 3-bullet explanation of key design choices.`;
 
     case 'audio':
+      if (isVi) {
+        return `[VAI TRÒ]: Giám đốc sản xuất âm nhạc và Chuyên gia thiết kế âm thanh.
+[NHIỆM VỤ]: Thiết lập prompt tạo âm thanh chất lượng phòng thu cho: "${clean}"
+[THÔNG SỐ ÂM NHẠC]: Xác định thể loại, nhịp điệu (BPM), điệu tính (Key), bộ nhạc cụ, chất giọng và dải tần.
+[CẤU TRÚC]: [Intro], [Verse], [Chorus], [Bridge], [Outro].
+[RÀNG BUỘC]: Tránh méo tiếng (clipping), đục dải trầm, đổi nhịp bất thường và bắt chước phong cách vi phạm bản quyền.
+[ĐỊNH DẠNG ĐẦU RA]: Trả về 1 đoạn prompt âm thanh hoàn chỉnh kèm khối negative prompt ngắn gọn.`;
+      }
       return `[ROLE]: Senior Music Producer and Sound Designer.
 [TASK]: Create an audio-generation prompt for: "${clean}"
 [MUSICAL SPECS]: Define genre, BPM, key, instrumentation, vocal texture, dynamics, and mix character.
@@ -474,6 +531,24 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 
     case 'research':
     default:
+      if (isVi) {
+        return `[VAI TRÒ]: Chuyên gia nghiên cứu và Cố vấn phân tích chiến lược.
+[BỐI CẢNH & MỤC TIÊU]: Phân tích chuyên sâu và toàn diện cho chủ đề:
+"${clean}"
+
+[CÁC BƯỚC THỰC HIỆN]:
+1. Tóm tắt điều hành: Luận điểm cốt lõi và phát hiện then chốt.
+2. Phân tích chi tiết: Khảo sát đa chiều kèm chỉ số định lượng và điểm đánh đổi (trade-offs).
+3. Rủi ro & Thách thức: Nhận diện điểm nghẽn cùng giải pháp phòng ngừa rủi ro.
+4. Đề xuất hành động: Lộ trình triển khai phân kỳ kèm thứ tự ưu tiên rõ ràng.
+
+[RÀNG BUỘC & GIỌNG ĐIỆU]:
+- Giọng điệu khách quan, chặt chẽ, dựa trên dữ liệu, không dùng từ ngữ quảng cáo thổi phồng.
+- Không tự suy diễn hay bịa số liệu; nêu rõ giả định đối với thông tin chưa có tài liệu xác thực.
+
+[ĐỊNH DẠNG ĐẦU RA]:
+- Định dạng GitHub Flavored Markdown với bảng so sánh và các đề mục rõ ràng.`;
+      }
       return `[ROLE]: Senior Research Fellow and Strategic Analyst.
 [CONTEXT & OBJECTIVE]: In-depth technical and market analysis for:
 "${clean}"
@@ -489,6 +564,6 @@ function generateLocalImprovedPrompt(original: string, domain: PromptDomain): st
 - Do NOT make unsubstantiated claims; highlight assumptions explicitly.
 
 [OUTPUT FORMAT]:
-- Structured GitHub Flavored Markdown with executive tables and comparative metrics.`;
+- Structured GitHub Flavored Markdown với executive tables and comparative metrics.`;
   }
 }

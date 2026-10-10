@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -83,7 +83,8 @@ const STORAGE_KEYS = {
   activeTab: 'lpromptActiveTab',
   snapshots: 'lpromptSnapshots',
   lastResponse: 'lpromptLastResponse',
-  availability: 'lpromptAvailability'
+  availability: 'lpromptAvailability',
+  lastBridgeDraftId: 'lpromptLastBridgeDraftId'
 } as const;
 
 const SAMPLE_CONSTRUCTION_CONTEXT = 'KTHT đứng tại tuyến cáp điện hạ tầng đã thi công, phía sau là khu vực cần nghiệm thu.';
@@ -163,7 +164,15 @@ export function ExtensionPanel() {
   const [copied, setCopied] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityState | null>(null);
   const [clock, setClock] = useState(() => Date.now());
-  const [lastBridgeDraftId, setLastBridgeDraftId] = useState('');
+  const lastBridgeDraftIdRef = useRef('');
+  const storageReadyRef = useRef<Promise<void>>(Promise.resolve());
+  const domainRef = useRef(domain);
+  const additionalInstructionRef = useRef(additionalInstruction);
+  const outputLanguageRef = useRef(outputLanguage);
+
+  useEffect(() => { domainRef.current = domain; }, [domain]);
+  useEffect(() => { additionalInstructionRef.current = additionalInstruction; }, [additionalInstruction]);
+  useEffect(() => { outputLanguageRef.current = outputLanguage; }, [outputLanguage]);
 
   // Construction state
   const [constructionContext, setConstructionContext] = useState('');
@@ -180,14 +189,19 @@ export function ExtensionPanel() {
   const [constructionCopied, setConstructionCopied] = useState(false);
 
   useEffect(() => {
-    void chrome.storage.local.get([
+    storageReadyRef.current = chrome.storage.local.get([
       STORAGE_KEYS.draft,
       STORAGE_KEYS.constructionDraft,
       STORAGE_KEYS.activeTab,
       STORAGE_KEYS.snapshots,
       STORAGE_KEYS.lastResponse,
-      STORAGE_KEYS.availability
+      STORAGE_KEYS.availability,
+      STORAGE_KEYS.lastBridgeDraftId
     ]).then((stored) => {
+      const savedBridgeDraftId = stored[STORAGE_KEYS.lastBridgeDraftId] as string | undefined;
+      if (savedBridgeDraftId) {
+        lastBridgeDraftIdRef.current = savedBridgeDraftId;
+      }
       const draft = stored[STORAGE_KEYS.draft] as StoredDraft | undefined;
       if (draft) {
         setSource(draft.source ?? '');
@@ -275,7 +289,7 @@ export function ExtensionPanel() {
   };
 
   useEffect(() => {
-    const listener = (message: unknown) => {
+    const messageListener = (message: unknown) => {
       const payload = message as { type?: string; source?: string };
       if (payload.type !== 'LPROMPT_DRAFT_UPDATED' || !payload.source) return;
       if (activeTab === 'construction') {
@@ -289,25 +303,71 @@ export function ExtensionPanel() {
         setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
       }
     };
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
+
+    const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName !== 'local' || !changes[STORAGE_KEYS.draft]?.newValue) return;
+      const newDraft = changes[STORAGE_KEYS.draft].newValue as StoredDraft;
+      if (typeof newDraft?.source === 'string' && newDraft.source) {
+        if (activeTab === 'construction') {
+          setConstructionContext(newDraft.source);
+          setConstructionCompiled(null);
+          saveConstructionDraft({ context: newDraft.source });
+          setStatus('Đã nhận bối cảnh thi công từ văn bản được bôi chọn.');
+        } else {
+          setSource(newDraft.source);
+          setCompiled(null);
+          setStatus('Đã nhận phần văn bản được chọn từ menu chuột phải.');
+        }
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+    chrome.storage.onChanged.addListener(storageListener);
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.storage.onChanged.removeListener(storageListener);
+    };
   }, [activeTab, saveConstructionDraft]);
 
   useEffect(() => {
     let active = true;
     const poll = async () => {
+      await storageReadyRef.current;
+      if (!active) return;
       const controller = new AbortController();
       const timeout = globalThis.setTimeout(() => controller.abort(), 2500);
       try {
         const res = await fetch('http://127.0.0.1:8484/api/extension/draft', { signal: controller.signal, cache: 'no-store' });
         if (!active || res.status === 204 || !res.ok) return;
-        const payload = await res.json() as { data?: { id?: string; source?: string } };
-        if (!payload.data?.id || !payload.data.source || payload.data.id === lastBridgeDraftId) return;
-        setLastBridgeDraftId(payload.data.id);
+        const payload = await res.json() as {
+          data?: {
+            id?: string;
+            source?: string;
+            domain?: PromptDomain;
+            additionalInstruction?: string;
+            outputLanguage?: 'vi' | 'en';
+          }
+        };
+        if (!payload.data?.id || !payload.data.source || payload.data.id === lastBridgeDraftIdRef.current) return;
+        lastBridgeDraftIdRef.current = payload.data.id;
         setSource(payload.data.source);
+        if (payload.data.domain) setDomain(payload.data.domain);
+        if (payload.data.additionalInstruction !== undefined) setAdditionalInstruction(payload.data.additionalInstruction);
+        if (payload.data.outputLanguage) setOutputLanguage(payload.data.outputLanguage);
         setCompiled(null);
         setStatus('Đã nhận prompt từ web app cục bộ.');
-        await chrome.storage.local.set({ [STORAGE_KEYS.draft]: { source: payload.data.source, domain, additionalInstruction, outputLanguage } });
+        const nextDomain = payload.data.domain || domainRef.current;
+        const nextInstruction = payload.data.additionalInstruction !== undefined ? payload.data.additionalInstruction : additionalInstructionRef.current;
+        const nextLang = payload.data.outputLanguage || outputLanguageRef.current;
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.lastBridgeDraftId]: payload.data.id,
+          [STORAGE_KEYS.draft]: {
+            source: payload.data.source,
+            domain: nextDomain,
+            additionalInstruction: nextInstruction,
+            outputLanguage: nextLang
+          }
+        });
       } catch {
         // Service là tùy chọn; khi offline extension vẫn hoạt động độc lập.
       } finally {
@@ -317,7 +377,7 @@ export function ExtensionPanel() {
     void poll();
     const interval = globalThis.setInterval(() => void poll(), 4000);
     return () => { active = false; globalThis.clearInterval(interval); };
-  }, [lastBridgeDraftId, domain, additionalInstruction, outputLanguage]);
+  }, []);
 
   useEffect(() => {
     if (!availability) return;

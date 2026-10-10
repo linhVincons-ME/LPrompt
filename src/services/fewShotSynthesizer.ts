@@ -65,8 +65,8 @@ function generateLocalFewShotExamples(prompt: string): FewShotExample[] {
         id: `ex-${Date.now()}-1`,
         input: 'Dữ liệu đầu vào: { "san_pham": "Phần mềm quản lý chấm công AI", "ngan_sach": "50tr", "khach_hang": "Chủ doanh nghiệp SME" }',
         output:
-          'Tiêu đề: "Bạn đang mất 15 giờ mỗi tháng chỉ để đối soát bảng chấm công thủ công?"\n\nNội dung chính:\n• Tự động nhận diện khuôn mặt chống gian lận 99.9%.\n• Đồng bộ trực tiếp với bảng lương trong 30 giây.\n• Tiết kiệm trung bình 12 triệu VNĐ chi phí nhân sự mỗi tháng.\n\nKêu gọi hành động (CTA): Đăng ký dùng thử 14 ngày miễn phí ngay hôm nay.',
-        explanation: 'Minh họa cách viết hook giải quyết nỗi đau và số liệu ROI cụ thể.'
+          'Tiêu đề: "Đối soát bảng chấm công thủ công đang chiếm nhiều thời gian của bạn?"\n\nNội dung chính:\n• Giới thiệu phần mềm quản lý chấm công AI cho doanh nghiệp SME.\n• Chỉ nêu tính năng, mức tiết kiệm và độ chính xác khi có tài liệu xác minh; dữ liệu đầu vào hiện chưa cung cấp các thông tin này.\n\nKêu gọi hành động (CTA): Liên hệ để tìm hiểu tính năng và điều kiện sử dụng thực tế.',
+        explanation: 'Minh họa hook và CTA không tự tạo số liệu ROI, tính năng hoặc ưu đãi chưa được xác minh.'
       }
     ];
   }

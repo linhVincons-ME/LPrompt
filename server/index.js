@@ -22,7 +22,12 @@ const versionSchema = z.object({
   createdAt: z.string().datetime().optional(), branchName: z.string().min(1).max(100).optional(), parentId: z.string().max(200).optional(),
   mergeParentId: z.string().max(200).optional(), contentHash: z.string().max(128).optional(), promptId: z.string().max(200).optional()
 });
-const extensionDraftSchema = z.object({ source: z.string().min(1).max(200_000) });
+const extensionDraftSchema = z.object({
+  source: z.string().min(1).max(200_000),
+  domain: z.string().max(100).optional(),
+  additionalInstruction: z.string().max(20_000).optional(),
+  outputLanguage: z.string().max(20).optional()
+});
 const EXTENSION_DRAFT_TTL_MS = 10 * 60 * 1000;
 function httpError(status, message) {
   const error = new Error(message);
@@ -55,9 +60,9 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     const origin = req.headers.origin;
-    const extensionMatch = typeof origin === 'string' ? /^chrome-extension:\/\/([a-p]{32})$/i.exec(origin) : null;
+    const extensionMatch = typeof origin === 'string' ? /^(?:chrome-extension:\/\/([a-p]{32})|moz-extension:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))$/i.exec(origin) : null;
     const extensionBridgeRead = req.method === 'GET' && req.path === '/api/extension/draft' && extensionMatch
-      && (allowedExtensionIds.size === 0 || allowedExtensionIds.has(extensionMatch[1]));
+      && (allowedExtensionIds.size === 0 || allowedExtensionIds.has(extensionMatch[1] || extensionMatch[2]));
     const originAllowed = !origin || (isLoopback
       ? /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin) || Boolean(extensionBridgeRead)
       : allowedOrigins.has(origin));
@@ -72,9 +77,9 @@ export function createApp({ host = process.env.LPROMPT_HOST || '127.0.0.1', serv
 
   app.get('/health', (req, res) => res.json({ status: serviceState.lifecycle === 'ready' ? 'ok' : serviceState.lifecycle, lifecycle: serviceState.lifecycle, service: 'lprompt-daemon', version: '3.0.0', port: req.socket.localPort, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024), database: DB_FILE, storageType: 'portable-embedded-sqlite' }));
   app.post('/api/extension/draft', (req, res) => {
-    const { source } = extensionDraftSchema.parse(req.body);
+    const draftData = extensionDraftSchema.parse(req.body);
     const now = Date.now();
-    extensionDraft = { id: crypto.randomUUID(), source, createdAt: new Date(now).toISOString(), expiresAt: now + EXTENSION_DRAFT_TTL_MS };
+    extensionDraft = { id: crypto.randomUUID(), ...draftData, createdAt: new Date(now).toISOString(), expiresAt: now + EXTENSION_DRAFT_TTL_MS };
     res.status(202).json({ success: true, id: extensionDraft.id, expiresAt: extensionDraft.expiresAt });
   });
   app.get('/api/extension/draft', (_req, res) => {

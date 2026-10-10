@@ -4,7 +4,6 @@ param(
   [switch]$DelayedAutoStart,
   [switch]$StartAfterInstall,
   [string]$NodeExe,
-  [string]$PythonExe,
   [string]$WinSwSource,
   [switch]$SkipBuild
 )
@@ -74,12 +73,6 @@ try {
 $templatePath = Join-Path $PSScriptRoot 'LPromptService.xml.template'
 $xml = Get-Content -LiteralPath $templatePath -Raw
 $delayedTag = if ($DelayedAutoStart) { '<delayedAutoStart>true</delayedAutoStart>' } else { '' }
-$pythonTag = ''
-if ($PythonExe) {
-  $PythonExe = [IO.Path]::GetFullPath($PythonExe)
-  if (-not (Test-Path -LiteralPath $PythonExe -PathType Leaf)) { throw "Python executable was not found: $PythonExe" }
-  $pythonTag = '<env name="LPROMPT_PYTHON" value="{0}" />' -f (ConvertTo-LPromptXmlText $PythonExe)
-}
 $replacements = @{
   '{{NODE_EXE}}' = (ConvertTo-LPromptXmlText $NodeExe)
   '{{APP_ROOT}}' = (ConvertTo-LPromptXmlText $script:LPromptRoot)
@@ -87,7 +80,6 @@ $replacements = @{
   '{{LOG_DIR}}' = (ConvertTo-LPromptXmlText $logDir)
   '{{START_MODE}}' = $StartMode
   '{{DELAYED_AUTO_START}}' = $delayedTag
-  '{{PYTHON_ENV}}' = $pythonTag
 }
 foreach ($token in $replacements.Keys) { $xml = $xml.Replace($token, $replacements[$token]) }
 if ($xml -match '\{\{[^}]+\}\}') { throw 'The service config still contains an unreplaced token.' }
@@ -99,7 +91,6 @@ $readTargets = @(
   (Join-Path $script:LPromptRoot 'server'),
   (Join-Path $script:LPromptRoot 'dist'),
   (Join-Path $script:LPromptRoot 'node_modules'),
-  (Join-Path $script:LPromptRoot 'python'),
   $script:LPromptRuntime
 )
 foreach ($readTarget in $readTargets) {

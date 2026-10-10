@@ -6,7 +6,9 @@ describe('extension overload protection', () => {
     expect(classifyTransientFailure('This model is currently experiencing high demand. Please try again later.')?.kind).toBe('overloaded');
     expect(classifyTransientFailure('429 Too many requests')?.kind).toBe('rate_limited');
     expect(classifyTransientFailure('Service temporarily unavailable')?.kind).toBe('temporarily_unavailable');
+    expect(classifyTransientFailure('Hệ thống đang quá tải, vui lòng thử lại sau.')?.kind).toBe('overloaded');
     expect(classifyTransientFailure('A normal model response')).toBeNull();
+    expect(classifyTransientFailure('Dây cáp bị quá tải phát nhiệt. Thử lại sau khi kiểm tra điện trở.')).toBeNull();
   });
 
   it('uses bounded exponential cooldowns', () => {

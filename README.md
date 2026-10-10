@@ -13,7 +13,7 @@ LPrompts Studio là bộ công cụ local-first để soạn, biên dịch, đá
 
 ## Trình duyệt hỗ trợ (Chrome & Firefox Extension)
 
-Yêu cầu Chrome 114+ hoặc Mozilla Firefox 115+ (khuyên dùng Firefox 142+).
+Yêu cầu Chrome 114+ hoặc Mozilla Firefox 142+.
 
 ```powershell
 npm ci
@@ -51,12 +51,16 @@ Draft, phản hồi và tối đa 10 snapshot được lưu bằng `chrome.stora
 ### Context menu và cầu nối cục bộ
 
 - Trên website bất kỳ, bôi chọn văn bản rồi bấm chuột phải → **Đưa phần đã chọn vào LPrompt**. Extension chỉ nhận đúng `selectionText`; không đọc DOM toàn trang.
-- Trong **Xem trước prompt cục bộ**, nút **Chuyển sang extension** gửi draft tới service bằng bộ nhớ tạm, TTL 10 phút. Extension đọc draft qua loopback; draft trung chuyển không được ghi vào SQLite.
-- Nếu cần giới hạn chính xác extension được phép đọc bridge, đặt `LPROMPT_EXTENSION_IDS` thành danh sách extension ID, phân tách bằng dấu phẩy, rồi restart service.
+- Trong **Xem trước prompt cục bộ**, nút **Chuyển sang extension** gửi draft kèm Domain tới service bằng bộ nhớ tạm, TTL 10 phút. Extension đọc draft qua loopback và tự động đồng bộ Domain tương ứng; draft trung chuyển không được ghi vào SQLite và được ghi nhớ ID đã nhận trong `chrome.storage.local` để không ghi đè bản nháp khi người dùng mở lại side panel.
+- Nếu cần giới hạn chính xác extension được phép đọc bridge, đặt `LPROMPT_EXTENSION_IDS` thành danh sách Chrome extension ID hoặc UUID trong origin `moz-extension://` của Firefox, phân tách bằng dấu phẩy, rồi restart service. UUID của Firefox không phải ID cố định `lprompt@linhvincons.local` trong manifest.
+
+Thao tác xóa prompt/phiên bản được lưu vào hàng đợi cục bộ trước khi đồng bộ SQLite. Khi service offline, bản ghi đã xóa không bị tải lại vào giao diện; hệ thống thử đồng bộ xóa khi mở web app và mỗi 30 giây. Nếu không ghi được hàng đợi, thao tác xóa bị từ chối để tránh mất trạng thái.
+
+Prompt video Thi Công dùng mục `[MỤC TIÊU CẢNH VIDEO]`, không dùng `[VAI TRÒ TỪNG ẢNH]`. Đây là mục tiêu nội dung cảnh, không phải ánh xạ ảnh tham chiếu vào khung hình đầu/cuối. Compiler ảnh tĩnh giữ tên mục cũ.
 
 ### Bảo vệ khi Gemini quá tải
 
-Content script theo dõi các thông báo quá tải/rate-limit tạm thời trên Gemini Web. Khi phát hiện:
+Content script theo dõi các thông báo quá tải/rate-limit tạm thời trên Gemini Web (chỉ quét các container cảnh báo hệ thống như `role="alert"`, banner lỗi, snackbar, tránh quét nhầm nội dung chuyên ngành kỹ thuật như "dây cáp quá tải" trong câu trả lời). Khi phát hiện:
 
 - prompt và bản compile vẫn được giữ nguyên;
 - lỗi không bị lưu như một phản hồi thành công;

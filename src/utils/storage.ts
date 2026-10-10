@@ -4,7 +4,8 @@ export function safeStorageGet(key: string): string | null {
 
 export function safeStorageSet(key: string, value: unknown): boolean {
   try {
-    globalThis.localStorage?.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    if (!globalThis.localStorage) return false;
+    globalThis.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
     return true;
   } catch { return false; }
 }

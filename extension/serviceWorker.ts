@@ -50,17 +50,17 @@ chrome.runtime.onStartup.addListener(() => {
 const actionApi = chrome.action ?? (chrome as unknown as { browserAction?: typeof chrome.action }).browserAction;
 if (actionApi?.onClicked) {
   actionApi.onClicked.addListener((tab) => {
-    void openLPromptSideView(tab?.windowId);
+    void Promise.resolve(openLPromptSideView(tab?.windowId)).catch((error) => console.error('LPrompt could not open side view:', error));
   });
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== CONTEXT_MENU_ID || !info.selectionText?.trim()) return;
+  void Promise.resolve(openLPromptSideView(tab?.windowId)).catch((error) => console.error('LPrompt could not open side view:', error));
   const source = info.selectionText.trim().slice(0, 200_000);
   void chrome.storage.local.get('lpromptDraft').then((stored) => {
     const previous = stored.lpromptDraft && typeof stored.lpromptDraft === 'object' ? stored.lpromptDraft : {};
     return chrome.storage.local.set({ lpromptDraft: { ...previous, source } });
   }).then(() => chrome.runtime.sendMessage({ type: 'LPROMPT_DRAFT_UPDATED', source }).catch(() => undefined))
-    .then(() => openLPromptSideView(tab?.windowId))
     .catch((error) => console.error('LPrompt could not import selected text:', error));
 });

@@ -13,6 +13,7 @@ import { extractVariables, interpolateTemplate, getInitialVariableValues } from 
 import { stableContentHash } from './utils/hash';
 import { BRANCH_NAME_PATTERN, findCommonAncestor, getBranchHead, mergePromptContents } from './utils/versionGraph';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from './utils/storage';
+import { queueDeletion, withoutPendingDeletions } from './services/deletionOutbox';
 import { Header, type WorkspaceView } from './components/Header';
 import { ScoreGauge } from './components/ScoreGauge';
 import { ScoreBreakdownCard } from './components/ScoreBreakdownCard';
@@ -37,6 +38,7 @@ import {
   fetchServerVersions,
   saveServerVersion,
   deleteServerVersion,
+  retryPendingDeletions,
   type ServiceHealth
 } from './services/apiClient';
 import {
@@ -100,7 +102,7 @@ export function App() {
     try {
       const saved = safeStorageGet('lprompt_saved_prompts');
       const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      return withoutPendingDeletions('prompts', Array.isArray(parsed) ? parsed : []);
     } catch {
       safeStorageRemove('lprompt_saved_prompts');
       return [];
@@ -111,7 +113,7 @@ export function App() {
     try {
       const saved = safeStorageGet('lprompt_versions');
       const parsed = saved ? JSON.parse(saved) as Array<Partial<PromptVersion>> : [];
-      return parsed.map((version) => ({
+      return withoutPendingDeletions('versions', parsed.map((version) => ({
         ...version,
         id: String(version.id ?? `ver-${crypto.randomUUID()}`),
         versionNumber: String(version.versionNumber ?? 'legacy'),
@@ -121,7 +123,7 @@ export function App() {
         createdAt: String(version.createdAt ?? new Date(0).toISOString()),
         branchName: version.branchName ?? 'main',
         contentHash: version.contentHash || stableContentHash(String(version.content ?? ''))
-      }));
+      })));
     } catch {
       safeStorageRemove('lprompt_versions');
       return [];
@@ -145,10 +147,11 @@ export function App() {
     checkServiceHealth().then(async (status) => {
       setServiceStatus(status);
       if (status.online) {
+        await retryPendingDeletions();
         // Sync prompts from embedded SQLite
         const serverPrompts = await fetchServerPrompts();
         if (serverPrompts) {
-          const localPrompts = initialSavedPromptsRef.current;
+          const localPrompts = withoutPendingDeletions('prompts', initialSavedPromptsRef.current);
           const merged = [...serverPrompts];
           for (const prompt of localPrompts) {
             if (!merged.some((item) => item.id === prompt.id)) {
@@ -156,24 +159,28 @@ export function App() {
               await saveServerPrompt(prompt);
             }
           }
-          setSavedPrompts(merged);
-          safeStorageSet('lprompt_saved_prompts', merged);
+          const visiblePrompts = withoutPendingDeletions('prompts', merged);
+          setSavedPrompts(visiblePrompts);
+          safeStorageSet('lprompt_saved_prompts', visiblePrompts);
         }
         // Sync versions from embedded SQLite
         const serverVersions = await fetchServerVersions();
         if (serverVersions) {
           const merged = [...serverVersions];
-          for (const version of initialVersionsRef.current) {
+          for (const version of withoutPendingDeletions('versions', initialVersionsRef.current)) {
             if (!merged.some((item) => item.id === version.id)) {
               merged.push(version);
               await saveServerVersion(version);
             }
           }
-          setVersions(merged);
-          safeStorageSet('lprompt_versions', merged);
+          const visibleVersions = withoutPendingDeletions('versions', merged);
+          setVersions(visibleVersions);
+          safeStorageSet('lprompt_versions', visibleVersions);
         }
       }
     });
+    const retryTimer = globalThis.setInterval(() => void retryPendingDeletions(), 30_000);
+    return () => globalThis.clearInterval(retryTimer);
   }, []);
 
   // Instant local evaluation (evaluates interpolated if variables exist)
@@ -204,8 +211,13 @@ export function App() {
   };
 
   // Copy helper
-  const handleCopy = (text: string, type: 'original' | 'improved') => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, type: 'original' | 'improved') => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      setAuditError('Không thể truy cập clipboard; hãy chọn và sao chép thủ công.');
+      return;
+    }
     if (type === 'original') {
       setCopiedOriginal(true);
       setTimeout(() => setCopiedOriginal(false), 2000);
@@ -334,9 +346,15 @@ export function App() {
       setAuditError('Không thể xóa commit đang là cha của commit khác. Hãy giữ lại để đồ thị phiên bản không bị đứt.');
       return;
     }
+    if (!queueDeletion('versions', versionId)) {
+      setAuditError('Không thể lưu yêu cầu xóa; phiên bản được giữ lại để tránh mất trạng thái đồng bộ.');
+      return;
+    }
     const updated = versions.filter((v) => v.id !== versionId);
     handleSaveVersions(updated);
-    void deleteServerVersion(versionId);
+    void deleteServerVersion(versionId).then((deleted) => {
+      if (!deleted) setAuditError('Đã xóa cục bộ; thao tác xóa SQLite đang chờ đồng bộ lại.');
+    });
   };
 
   const handleRollbackVersion = (version: PromptVersion) => {
@@ -782,10 +800,16 @@ export function App() {
           handleLocalEvaluate(p.improved_prompt, variableValues, p.domain);
         }}
         onDeletePrompt={(id) => {
+          if (!queueDeletion('prompts', id)) {
+            setAuditError('Không thể lưu yêu cầu xóa; prompt được giữ lại để tránh mất trạng thái đồng bộ.');
+            return;
+          }
           const filtered = savedPrompts.filter((x) => x.id !== id);
           setSavedPrompts(filtered);
           safeStorageSet('lprompt_saved_prompts', filtered);
-          deleteServerPrompt(id);
+          void deleteServerPrompt(id).then((deleted) => {
+            if (!deleted) setAuditError('Đã xóa cục bộ; thao tác xóa SQLite đang chờ đồng bộ lại.');
+          });
         }}
       />
 
@@ -794,6 +818,7 @@ export function App() {
         isOpen={isPlaygroundOpen}
         onClose={() => setIsPlaygroundOpen(false)}
         prompt={playgroundPrompt}
+        domain={currentDomain}
       />
 
       <CodeExportModal

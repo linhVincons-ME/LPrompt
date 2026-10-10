@@ -15,15 +15,15 @@ export interface AvailabilityState {
 const FAILURE_PATTERNS: Array<{ kind: TransientFailureKind; pattern: RegExp }> = [
   {
     kind: 'overloaded',
-    pattern: /high demand|spikes? in demand|quá tải|lưu lượng (?:đang )?cao/i
+    pattern: /high demand|spikes? in demand|(?:hệ thống|máy chủ|gemini).{0,20}quá tải|lưu lượng (?:truy cập )?(?:đang )?cao/i
   },
   {
     kind: 'rate_limited',
-    pattern: /too many requests|rate limit|resource exhausted|\b429\b|quá nhiều yêu cầu|giới hạn (?:tốc độ|yêu cầu)/i
+    pattern: /too many requests|rate limit|resource exhausted|\b429\b|quá nhiều yêu cầu|vượt quá giới hạn (?:tốc độ|yêu cầu)/i
   },
   {
     kind: 'temporarily_unavailable',
-    pattern: /temporarily unavailable|service unavailable|try again later|please try again|tạm thời không khả dụng|thử lại sau/i
+    pattern: /temporarily unavailable|service unavailable|try again later|please try again|(?:dịch vụ )?tạm thời không khả dụng|vui lòng thử lại sau/i
   }
 ];
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import type { PromptExecutionResult } from '../types';
+import type { PromptDomain, PromptExecutionResult } from '../types';
 import { previewPromptLocally } from '../services/execution';
 import { inspectPromptLocally } from '../services/promptInspector';
 import { sendDraftToExtension } from '../services/apiClient';
@@ -20,12 +20,14 @@ interface LivePlaygroundModalProps {
   isOpen: boolean;
   onClose: () => void;
   prompt: string;
+  domain?: PromptDomain;
 }
 
 export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
   isOpen,
   onClose,
-  prompt
+  prompt,
+  domain
 }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<PromptExecutionResult | null>(null);
@@ -64,7 +66,7 @@ export const LivePlaygroundModal: React.FC<LivePlaygroundModalProps> = ({
 
   const handleSendToExtension = async () => {
     setBridgeStatus('Đang chuyển...');
-    const sent = await sendDraftToExtension(prompt);
+    const sent = await sendDraftToExtension({ source: prompt, domain });
     setBridgeStatus(sent ? 'Đã chuyển; mở side panel để nhận.' : 'Service chưa sẵn sàng hoặc đã timeout.');
   };
 

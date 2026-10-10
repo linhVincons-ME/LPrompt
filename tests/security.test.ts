@@ -13,4 +13,10 @@ describe('OWASP scanner', () => {
     expect(report.mode).toBe('static');
     expect(report.attackResults).toBeUndefined();
   });
+  it('patches Vietnamese prompt with Vietnamese guardrails and recognizes Vietnamese tags', () => {
+    const report = scanPromptSecurityLocally('Tóm tắt tài liệu này.\n<yeu_cau_nguoi_dung>nội dung</yeu_cau_nguoi_dung>');
+    expect(report.patchedPrompt).toContain('[BẢO MẬT & GUARDRAILS]');
+    const injectionCheck = report.checks.find((c) => c.id === 'LLM01');
+    expect(injectionCheck?.status).toBe('pass');
+  });
 });

@@ -13,7 +13,7 @@ describe('construction prompt compiler', () => {
 
   const VIDEO_SECTIONS = [
     '[ĐẦU RA VÀ THỜI LƯỢNG]',
-    '[VAI TRÒ TỪNG ẢNH]',
+    '[MỤC TIÊU CẢNH VIDEO]',
     '[NHÂN VẬT VÀ CÁC ĐẶC ĐIỂM ƯU TIÊN]',
     '[BỐI CẢNH, VỊ TRÍ VẬT THỂ]',
     '[HÀNH ĐỘNG VÀ CAMERA]',
@@ -68,6 +68,9 @@ describe('construction prompt compiler', () => {
     expect(result.prompt).toContain('Video hướng dẫn kỹ thuật');
     expect(result.prompt).toContain('15 giây');
     expect(result.prompt).toContain('9:16');
+    expect(result.prompt).not.toContain('[VAI TRÒ TỪNG ẢNH]');
+    expect(result.prompt).not.toContain('Ảnh tài liệu kỹ thuật');
+    expect(result.prompt).toContain('không phải bằng chứng nghiệm thu');
   });
 
   it('infers action and role based on dialogue keywords', () => {
@@ -159,5 +162,80 @@ describe('construction prompt compiler', () => {
       referenceAssetCount: 0
     });
     expect(result.warnings.some((warning) => warning.includes('chưa có file ảnh thật'))).toBe(true);
+  });
+
+  it('keeps the video camera focused on TDTD when the crew has no KTHT', () => {
+    const result = compileConstructionPrompt({ context: 'Hiện trường thi công.', outputType: 'video', crewPreset: 'tdtd-cnd' });
+    expect(result.prompt).toContain('để thấy TDTD cùng khu vực thi công');
+    expect(result.prompt).not.toContain('để thấy KTHT');
+  });
+
+  it('detects Vietnamese audio and duration conflicts in image prompt inspection', () => {
+    const inspection = inspectConstructionAdditionalRequirements('Có âm thanh hiện trường; thời lượng 10 giây.', {
+      outputType: 'image',
+      aspectRatio: '16:9',
+      participantCount: 1
+    });
+    expect(inspection.issues.some((issue) => issue.code === 'image-media-conflict')).toBe(true);
+  });
+
+  it('treats negated media in image prompt as warning instead of blocking error', () => {
+    const inspection = inspectConstructionAdditionalRequirements('Không có âm thanh, không nhạc nền; không cần thời lượng.', {
+      outputType: 'image',
+      aspectRatio: '16:9',
+      participantCount: 1
+    });
+    expect(inspection.issues.some((issue) => issue.code === 'image-media-conflict')).toBe(false);
+    expect(inspection.issues.some((issue) => issue.code === 'duplicate-no-media')).toBe(true);
+
+    expect(() => compileConstructionPrompt({
+      context: 'KTHT kiểm tra hiện trường.',
+      outputType: 'image',
+      aspectRatio: '16:9',
+      participantCount: 1,
+      additionalRequirements: 'Không có âm thanh, không nhạc nền; không cần thời lượng.'
+    })).not.toThrow();
+  });
+
+  it('keeps remaining descriptions in compound sentences when stripping negated media or text', () => {
+    const compoundMedia = inspectConstructionAdditionalRequirements('Không có âm thanh, cột điện sơn màu cam XYZQ', {
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1
+    });
+    expect(compoundMedia.issues.some((issue) => issue.code === 'duplicate-no-media')).toBe(true);
+    expect(compoundMedia.normalized).toContain('cột điện sơn màu cam XYZQ');
+
+    const promptWithMedia = compileConstructionPrompt({
+      context: 'KTHT kiểm tra tuyến đường dây.',
+      outputType: 'image',
+      additionalRequirements: 'Không có âm thanh, cột điện sơn màu cam XYZQ'
+    });
+    expect(promptWithMedia.prompt).toContain('cột điện sơn màu cam XYZQ');
+
+    const compoundText = inspectConstructionAdditionalRequirements('Không chèn chữ, cột điện sơn màu cam XYZQ', {
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1
+    });
+    expect(compoundText.issues.some((issue) => issue.code === 'duplicate-no-text')).toBe(true);
+    expect(compoundText.normalized).toContain('cột điện sơn màu cam XYZQ');
+
+    // Negated combined items (và/hoặc) should become warnings without throwing
+    const combinedWarning = inspectConstructionAdditionalRequirements('Không có âm thanh và nhạc nền; ảnh không kèm âm thanh', {
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1
+    });
+    expect(combinedWarning.issues.some((issue) => issue.code === 'image-media-conflict')).toBe(false);
+    expect(combinedWarning.issues.some((issue) => issue.code === 'duplicate-no-media')).toBe(true);
+
+    // Explicit request for audio must still trigger error
+    const audioError = inspectConstructionAdditionalRequirements('Có âm thanh hiện trường', {
+      outputType: 'image',
+      aspectRatio: '9:16',
+      participantCount: 1
+    });
+    expect(audioError.issues.some((issue) => issue.code === 'image-media-conflict')).toBe(true);
   });
 });
